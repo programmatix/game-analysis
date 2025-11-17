@@ -1,0 +1,21 @@
+{
+  "name": "lorcana",
+  "version": "1.0.0",
+  "description": "",
+  "bin": {
+    "lorcana-proxy": "src/cli.js"
+  },
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "commander": "^14.0.2",
+    "pdf-lib": "^1.17.1",
+    "sharp": "^0.34.5"
+  }
+}
