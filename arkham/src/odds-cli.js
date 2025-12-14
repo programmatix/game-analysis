@@ -42,19 +42,6 @@ function openingDistribution({ deckSize, weaknesses, targetCopies, openingHand }
   return { distribution, openingHitChance };
 }
 
-function nextDrawsProbability({ deckSize, targetCopies, openingHand, nextDraws, distribution }) {
-  const remainingDeck = deckSize - openingHand;
-  let probability = 0;
-
-  distribution.forEach(({ hits, probability: weight }) => {
-    const remainingTargets = targetCopies - hits;
-    const missChance = probabilityNoHits(remainingDeck, remainingTargets, nextDraws);
-    probability += weight * (1 - missChance);
-  });
-
-  return probability;
-}
-
 function main() {
   program
     .name('arkham-odds')
@@ -93,13 +80,22 @@ function main() {
     openingHand,
   });
 
-  const nextHitChance = nextDrawsProbability({
-    deckSize,
-    targetCopies,
-    openingHand,
-    nextDraws,
-    distribution,
-  });
+  const cumulativeAfterDraws = draws => {
+    const remainingDeck = deckSize - openingHand;
+    let probability = 0;
+
+    distribution.forEach(({ hits, probability: weight }) => {
+      const remainingTargets = targetCopies - hits;
+      if (hits > 0) {
+        probability += weight; // already hit in opening hand
+      } else {
+        const missChance = probabilityNoHits(remainingDeck, remainingTargets, draws);
+        probability += weight * (1 - missChance);
+      }
+    });
+
+    return probability;
+  };
 
   const missOpening = probabilityNoHits(nonWeakDeck, targetCopies, openingHand);
   const conditionalNextIfMiss = missOpening === 0
@@ -111,11 +107,16 @@ function main() {
   console.log('Arkham draw odds (weaknesses discarded during opening, then shuffled back)');
   console.log(`Deck size: ${deckSize} (${weaknesses} weaknesses)`);
   console.log(`Target copies: ${targetCopies}`);
-  console.log(`Opening hand: ${openingHand} kept cards`);
+  console.log(`Opening hand: ${openingHand} kept cards (models auto discarding weaknesses)`);
   console.log(`Next draws: ${nextDraws}`);
   console.log('');
-  console.log(`P(hit in opening hand): ${pct(openingHitChance)}%`);
-  console.log(`P(hit in next ${nextDraws} draws): ${pct(nextHitChance)}%`);
+  console.log('Step\t\tP(hit by this point)');
+  console.log(`Opening hand\t${pct(openingHitChance)}%`);
+  for (let i = 1; i <= nextDraws; i += 1) {
+    const cumulative = cumulativeAfterDraws(i);
+    console.log(`Draw ${i}\t\t${pct(cumulative)}%`);
+  }
+  console.log('');
   console.log(`P(hit in next ${nextDraws} given miss in opening): ${pct(conditionalNextIfMiss)}%`);
 }
 

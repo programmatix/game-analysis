@@ -42,9 +42,12 @@ async function main() {
   }
 
   console.log('Sets required for this deck:');
-  packSummary.forEach(({ name, code, count }) => {
+  packSummary.forEach(({ name, code, count, cards: packCards }) => {
     const suffix = count === 1 ? 'card' : 'cards';
     console.log(`- ${name} [${code}] — ${count} ${suffix}`);
+    packCards.forEach(card => {
+      console.log(`    • ${card.count}x ${card.name}`);
+    });
   });
 
   const unknown = packSummary.filter(pack => pack.isUnknown);
@@ -83,20 +86,33 @@ async function loadPackMetadata(dataDir) {
 }
 
 function summarizePacks(cards, packMap) {
-  const counts = new Map();
+  const packsByCode = new Map();
 
   cards.forEach(card => {
     const packCode = card && (card.pack_code || card.packCode);
     const code = packCode || 'unknown';
-    counts.set(code, (counts.get(code) || 0) + 1);
+    const pack = packsByCode.get(code) || {
+      code,
+      count: 0,
+      cards: new Map(),
+    };
+    pack.count += 1;
+    const label = formatCardLabel(card);
+    pack.cards.set(label, (pack.cards.get(label) || 0) + 1);
+    packsByCode.set(code, pack);
   });
 
-  const packs = Array.from(counts.entries()).map(([code, count]) => {
-    const meta = packMap.get(code);
+  const packs = Array.from(packsByCode.values()).map(pack => {
+    const meta = packMap.get(pack.code);
+    const cardList = Array.from(pack.cards.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
     return {
-      code,
-      count,
-      name: meta && meta.name ? meta.name : `Unknown pack (${code})`,
+      code: pack.code,
+      count: pack.count,
+      cards: cardList,
+      name: meta && meta.name ? meta.name : `Unknown pack (${pack.code})`,
       date: meta && meta.date_release ? meta.date_release : null,
       position: Number.isFinite(meta && meta.position) ? meta.position : Number.MAX_SAFE_INTEGER,
       isUnknown: !meta,
@@ -114,6 +130,25 @@ function summarizePacks(cards, packMap) {
   });
 
   return packs;
+}
+
+function formatCardLabel(card) {
+  if (!card) return '(unknown card)';
+  const parts = [];
+  if (card.name) {
+    parts.push(card.name);
+  } else if (card.code) {
+    parts.push(card.code);
+  } else {
+    parts.push('(no name)');
+  }
+  if (card.subname) {
+    parts.push(`: ${card.subname}`);
+  }
+  if (Number.isFinite(card.xp)) {
+    parts.push(` (XP ${card.xp})`);
+  }
+  return parts.join('');
 }
 
 main().catch(err => {

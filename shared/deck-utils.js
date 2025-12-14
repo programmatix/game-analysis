@@ -77,23 +77,78 @@ function parseDeckList(text, options = {}) {
       continue;
     }
 
-    const { name, code } = parseNameWithCode(rawName);
+    const { name, code, annotations } = parseNameWithCode(rawName);
     if (!name) {
       console.warn(`Skipping line "${line}" - card name is missing`);
       continue;
     }
 
-    entries.push({ count, name, code });
+    const entry = { count, name, code };
+    if (annotations && Object.keys(annotations).length > 0) {
+      entry.annotations = annotations;
+    }
+    entries.push(entry);
   }
 
   return entries;
 }
 
 function parseNameWithCode(text) {
-  const match = /^(.*?)(?:\s*\[([^\]]+)\])?$/.exec(text.trim());
-  const name = match && match[1] ? match[1].trim() : '';
-  const code = match && match[2] ? match[2].trim() : undefined;
-  return { name, code };
+  const bracketRegex = /\[([^\]]+)\]/g;
+  const bracketTokens = [];
+  let match;
+  while ((match = bracketRegex.exec(text)) !== null) {
+    bracketTokens.push({
+      index: match.index,
+      raw: match[0],
+      value: match[1].trim(),
+    });
+  }
+
+  const name = stripBracketTokens(text, bracketTokens);
+  let code;
+  let resourceTotal = 0;
+  let drawTotal = 0;
+  const keywordSet = new Set();
+
+  for (const token of bracketTokens) {
+    const lowered = token.value.toLowerCase();
+
+    if (!code && isPossibleCardCode(lowered)) {
+      code = token.value;
+      continue;
+    }
+
+    const modifier = parseModifier(token.value);
+    if (modifier) {
+      if (modifier.type === 'resources') {
+        resourceTotal += modifier.value;
+      } else if (modifier.type === 'draw') {
+        drawTotal += modifier.value;
+      }
+      continue;
+    }
+
+    if (lowered) {
+      keywordSet.add(lowered);
+    }
+  }
+
+  const annotations = {};
+  if (resourceTotal !== 0) {
+    annotations.resources = resourceTotal;
+  }
+  if (drawTotal !== 0) {
+    annotations.draw = drawTotal;
+  }
+  if (keywordSet.size) {
+    annotations.keywords = Array.from(keywordSet);
+    if (keywordSet.has('weapon')) {
+      annotations.weapon = true;
+    }
+  }
+
+  return { name, code, annotations };
 }
 
 function normalizeName(text) {
@@ -150,10 +205,52 @@ function resolveIncludePath(target, baseDir) {
   return path.resolve(baseDir || process.cwd(), fileName);
 }
 
+function countDeckEntries(entries) {
+  return entries.reduce((total, entry) => total + (Number(entry.count) || 0), 0);
+}
+
+function stripBracketTokens(text, tokens) {
+  if (!tokens.length) {
+    return text.trim();
+  }
+
+  let cursor = 0;
+  const parts = [];
+  for (const token of tokens) {
+    parts.push(text.slice(cursor, token.index));
+    cursor = token.index + token.raw.length;
+  }
+  parts.push(text.slice(cursor));
+  return parts.join('').trim();
+}
+
+function isPossibleCardCode(value) {
+  return /^[0-9]+[a-z]?$/i.test(value);
+}
+
+function parseModifier(value) {
+  const match = /^([a-z]+)\s*:\s*(-?\d+(?:\.\d+)?)$/i.exec(value.trim());
+  if (!match) return null;
+
+  const [, key, numberText] = match;
+  const normalizedKey = key.toLowerCase();
+  if (normalizedKey !== 'resources' && normalizedKey !== 'draw') {
+    return null;
+  }
+
+  const parsedNumber = Number(numberText);
+  if (!Number.isFinite(parsedNumber)) {
+    return null;
+  }
+
+  return { type: normalizedKey, value: parsedNumber };
+}
+
 module.exports = {
   readDeckText,
   parseDeckList,
   normalizeName,
   sanitizeFileName,
   resolveNameAndOutput,
+  countDeckEntries,
 };

@@ -5,6 +5,7 @@ const { resolveNameAndOutput } = require('../../shared/deck-utils');
 
 const DEFAULT_CACHE_DIR = path.join('.cache', 'arkham-card-art');
 const DEFAULT_DATA_DIR = path.join(__dirname, '..', 'arkhamdb-json-data');
+const DEFAULT_EXPECTED_SIZE = 33;
 
 function parseCliOptions() {
   const program = new Command();
@@ -14,6 +15,7 @@ function parseCliOptions() {
     .option('-i, --input <file>', 'Deck list file (defaults to stdin)')
     .option('--data-dir <dir>', 'Path to arkhamdb-json-data root', DEFAULT_DATA_DIR)
     .option('--cache-dir <dir>', 'Cache directory for downloaded art', DEFAULT_CACHE_DIR)
+    .option('--expected-size <number>', 'Warn when the total card count differs (0 disables)', DEFAULT_EXPECTED_SIZE.toString())
     .option('--grid-size <number>', 'Grid size (NxN)', '3')
     .option('--card-width-mm <number>', 'Card width in millimetres', '63.5')
     .option('--card-height-mm <number>', 'Card height in millimetres', '88.9')
@@ -29,6 +31,7 @@ function parseCliOptions() {
   const cardHeightPt = mmToPt(parsePositiveNumber('--card-height-mm', options.cardHeightMm));
   const cutMarkLengthPt = mmToPt(parsePositiveNumber('--cut-mark-length-mm', options.cutMarkLengthMm));
   const face = String(options.face || 'a').toLowerCase() === 'b' ? 'b' : 'a';
+  const expectedDeckSize = parseExpectedSize(options.expectedSize);
   const { deckName, outputPath } = resolveNameAndOutput(options.name);
 
   return {
@@ -42,6 +45,7 @@ function parseCliOptions() {
     face,
     deckName,
     outputPath,
+    expectedDeckSize,
   };
 }
 
@@ -59,6 +63,14 @@ function parsePositiveNumber(flag, raw) {
     throw new Error(`${flag} must be a positive number`);
   }
   return value;
+}
+
+function parseExpectedSize(raw) {
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new Error('--expected-size must be a non-negative integer');
+  }
+  return parsed === 0 ? null : parsed;
 }
 
 module.exports = {

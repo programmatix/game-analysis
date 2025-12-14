@@ -8,25 +8,6 @@ Create printable proxy PDFs for Arkham Horror: The Card Game. The tool reads a d
 - From this folder run `npm install` to pull dependencies.
 - Uses the local `arkhamdb-json-data/` by default; override with `--data-dir` if you want to point at another checkout.
 
-### Usage
-
-```bash
-# deck.txt lines look like: "2 Lucky! (2)"
-npx arkham-proxy --input deck.txt --name "Roland Solo"
-```
-
-Options:
-
-- `--input <file>`: Deck list to read; if omitted, reads from stdin.
-- `--name <text>`: Deck name for the PDF filename/footer (`deck` → `deck.pdf`).
-- `--data-dir <dir>`: Path to `arkhamdb-json-data` (defaults to the copy in this repo).
-- `--cache-dir <dir>`: Cache directory for downloaded art (default `.cache/arkham-card-art`).
-- `--grid-size <n>`: NxN grid per page (default `3`).
-- `--card-width-mm` / `--card-height-mm`: Physical card size in millimetres.
-- `--cut-mark-length-mm`: Length of edge cut marks.
-- `--face <a|b>`: Which face to use when a code lacks an explicit side (defaults to `a`).
-
-Deck lines support comments starting with `#` or `//`. Ambiguous names (like cards with multiple XP versions) can be disambiguated with a code (`01030`) or an XP suffix (`Lucky! (2)`).
 
 ## Decklist format
 
@@ -34,4 +15,48 @@ Deck lines support comments starting with `#` or `//`. Ambiguous names (like car
 2 knife
 1 sophie[03009]
 [include:partial-mark]
+# comment
+// comment
+/* multi-line comment */
+```
+
+### Arkham annotations
+
+Tag Arkham-specific utility in square brackets so the sampler CLI can track it:
+
+- `[weapon]` marks a card as a weapon.
+- `[resources:<n>]` adds that many resources when you see and play the card.
+- `[draw:<n>]` adds that many extra draws.
+
+Example: `2 emergency cache[01088] [resources:3]`
+
+### Proxy deck generator
+
+```bash
+# deck.txt lines look like: "2 Lucky! (2)"
+npx arkham-proxy --input deck.txt --name "Roland Solo"
+```
+
+### Odds helper
+
+Compute draw odds that respect Arkham opening-hand weakness redraws:
+
+```bash
+npx arkham-odds --deck-size 33 --weaknesses 2 --target-copies 2 --opening-hand 5 --next-draws 10
+```
+
+### Hand sampler
+
+Sample 10,000 opening hands and early draws, counting weapons plus resource/draw potential (starts at 5 resources and +1 per draw):
+
+```bash
+npx arkham-hand-sim --input deck.txt --opening-hand 5 --next-draws 8
+```
+
+### Required sets
+
+List every pack or box needed for a deck using the full names from arkhamdb:
+
+```bash
+npx arkham-sets --input deck.txt
 ```
