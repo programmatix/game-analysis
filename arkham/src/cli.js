@@ -40,13 +40,17 @@ async function main() {
     console.log(`Skipping ${skippedProxyCount} card${skippedProxyCount === 1 ? '' : 's'} marked [skipproxy].`);
   }
 
-  const deckCards = resolveDeckCards(proxyEntries, lookup);
+  const deckCards = resolveDeckCards(proxyEntries, lookup, { attachEntry: true });
+  const proxyCards = deckCards.map(({ card, entry }) => ({
+    card,
+    skipBack: shouldSkipBack(entry),
+  }));
   const cardIndex = buildCardCodeIndex(cards);
 
   await fs.promises.mkdir(options.cacheDir, { recursive: true });
 
   const pdfBytes = await buildPdf({
-    cards: deckCards,
+    cards: proxyCards,
     cacheDir: options.cacheDir,
     cardWidthPt: options.cardWidthPt,
     cardHeightPt: options.cardHeightPt,
@@ -81,6 +85,21 @@ function shouldSkipProxy(entry) {
   if (Array.isArray(entry.annotations.keywords)) {
     for (const keyword of entry.annotations.keywords) {
       if (String(keyword).toLowerCase() === 'skipproxy') {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+function shouldSkipBack(entry) {
+  if (!entry?.annotations) return false;
+  if (entry.annotations.skipBack) return true;
+
+  if (Array.isArray(entry.annotations.keywords)) {
+    for (const keyword of entry.annotations.keywords) {
+      if (String(keyword).toLowerCase() === 'skipback') {
         return true;
       }
     }

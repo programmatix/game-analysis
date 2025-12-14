@@ -148,10 +148,17 @@ function parseNameWithCode(text) {
     }
     if (keywordSet.has('permanent')) {
       annotations.permanent = true;
+      annotations.ignoreDeckLimit = true;
+    }
+    if (keywordSet.has('ignorefordecklimit')) {
+      annotations.ignoreDeckLimit = true;
     }
   }
   if (keywordSet.has('skipproxy')) {
     annotations.skipProxy = true;
+  }
+  if (keywordSet.has('skipback')) {
+    annotations.skipBack = true;
   }
 
   return { name, code, annotations };
@@ -217,8 +224,10 @@ function countDeckEntries(entries) {
     const keywords = Array.isArray(annotations?.keywords) ? annotations.keywords : [];
     const isPermanent = Boolean(annotations?.permanent)
       || keywords.some(keyword => String(keyword).toLowerCase() === 'permanent');
+    const ignoreDeckLimit = Boolean(annotations?.ignoreDeckLimit)
+      || keywords.some(keyword => String(keyword).toLowerCase() === 'ignorefordecklimit');
 
-    if (isPermanent) {
+    if (isPermanent || ignoreDeckLimit) {
       return total;
     }
 

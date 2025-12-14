@@ -5,7 +5,7 @@ const { resolveNameAndOutput } = require('../../shared/deck-utils');
 
 const DEFAULT_CACHE_DIR = path.join('.cache', 'arkham-card-art');
 const DEFAULT_DATA_DIR = path.join(__dirname, '..', 'arkhamdb-json-data');
-const DEFAULT_EXPECTED_SIZE = 33;
+const DEFAULT_EXPECTED_SIZE = 30;
 
 function parseCliOptions() {
   const program = new Command();

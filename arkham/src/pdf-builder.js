@@ -33,7 +33,7 @@ async function buildPdf({
   const cardsPerPage = gridSize * gridSize;
   const gapPt = mmToPt(GAP_BETWEEN_CARDS_MM);
   const imageCache = new Map();
-  const cardEntries = cards.map(card => resolveCardFaces(card, face, cardIndex));
+  const cardEntries = cards.map(card => resolveCardFaces(normalizeDeckCard(card), face, cardIndex));
   const pagePlan = buildPagePlan(cardEntries, cardsPerPage);
   const totalPages = pagePlan.length || 1;
   const layout = computeGridLayout({
@@ -103,23 +103,38 @@ async function buildPdf({
   return pdfDoc.save();
 }
 
-function resolveCardFaces(card, defaultFace, cardIndex) {
+function normalizeDeckCard(cardOrEntry) {
+  if (cardOrEntry && typeof cardOrEntry === 'object' && 'card' in cardOrEntry) {
+    return {
+      card: cardOrEntry.card,
+      skipBack: Boolean(cardOrEntry.skipBack),
+    };
+  }
+
+  return { card: cardOrEntry, skipBack: false };
+}
+
+function resolveCardFaces(deckCard, defaultFace, cardIndex) {
+  const card = deckCard && deckCard.card ? deckCard.card : deckCard;
+  const skipBack = Boolean(deckCard && deckCard.skipBack);
   const faceFromCode = parseFaceFromCode(card?.code);
   const frontFace = faceFromCode ?? (defaultFace === 'b' ? 'b' : 'a');
   let backCard = null;
   let backFace = null;
 
-  if (card?.double_sided) {
-    backCard = card;
-    backFace = flipFace(frontFace);
-  } else if (card?.back_link) {
-    const target = cardIndex?.get(String(card.back_link).trim());
-    if (target) {
-      backCard = target;
-      backFace = parseFaceFromCode(target.code) ?? flipFace(frontFace);
-    } else {
-      const label = card?.name || card?.code || 'card';
-      console.warn(`Unable to find back_link card "${card.back_link}" for ${label}.`);
+  if (!skipBack) {
+    if (card?.double_sided) {
+      backCard = card;
+      backFace = flipFace(frontFace);
+    } else if (card?.back_link) {
+      const target = cardIndex?.get(String(card.back_link).trim());
+      if (target) {
+        backCard = target;
+        backFace = parseFaceFromCode(target.code) ?? flipFace(frontFace);
+      } else {
+        const label = card?.name || card?.code || 'card';
+        console.warn(`Unable to find back_link card "${card.back_link}" for ${label}.`);
+      }
     }
   }
 

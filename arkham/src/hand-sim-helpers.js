@@ -1,6 +1,8 @@
 const { normalizeName } = require('../../shared/deck-utils');
+const { assertNoAmbiguousCards } = require('./card-data');
 
 function expandDeck(entries, lookup) {
+  assertNoAmbiguousCards(entries, lookup);
   const cards = [];
   for (const entry of entries) {
     const card = resolveDeckCard(entry, lookup);
@@ -42,21 +44,6 @@ function resolveDeckCard(entry, lookup) {
 
   const unique = dedupeByCode(matches);
   const candidates = unique.length ? unique : matches;
-  if (candidates.length > 1) {
-    const codes = candidates
-      .map(card => {
-        const headerParts = [card.code || '(no code)', card.name || '(no name)'];
-        if (Number.isFinite(card.xp)) {
-          headerParts.push(`XP ${card.xp}`);
-        }
-        const header = headerParts.filter(Boolean).join(' — ');
-        const text = typeof card.text === 'string' && card.text.trim() ? card.text.trim() : '(no description)';
-        return `- ${header}: ${text}`;
-      })
-      .join('\n');
-    throw new Error(`Card "${entry.name}" is ambiguous. Specify a code or XP value to disambiguate. Candidates:\n${codes}`);
-  }
-
   return candidates[0];
 }
 

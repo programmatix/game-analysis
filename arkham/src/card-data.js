@@ -68,7 +68,52 @@ function buildCardLookup(cards) {
   return lookup;
 }
 
-function resolveDeckCards(entries, lookup) {
+function describeAmbiguousCandidates(candidates) {
+  return candidates
+    .map(card => {
+      const headerParts = [card.code || '(no code)', card.name || '(no name)'];
+      if (Number.isFinite(card.xp)) {
+        headerParts.push(`XP ${card.xp}`);
+      }
+      const header = headerParts.filter(Boolean).join(' — ');
+      const text = typeof card.text === 'string' && card.text.trim() ? card.text.trim() : '(no description)';
+      return `- ${header}: ${text}`;
+    })
+    .join('\n');
+}
+
+function findAmbiguousEntries(entries, lookup) {
+  const ambiguous = [];
+  for (const entry of entries) {
+    if (entry.code) continue;
+
+    const key = normalizeName(entry.name);
+    const matches = lookup.get(key);
+    if (!matches || !matches.length) continue;
+
+    const unique = dedupeByCode(matches);
+    const candidates = unique.length ? unique : matches;
+    if (candidates.length > 1) {
+      ambiguous.push({ entry, candidates });
+    }
+  }
+  return ambiguous;
+}
+
+function assertNoAmbiguousCards(entries, lookup) {
+  const ambiguous = findAmbiguousEntries(entries, lookup);
+  if (!ambiguous.length) return;
+
+  const details = ambiguous
+    .map(({ entry, candidates }) => `Card "${entry.name}" is ambiguous. Candidates:\n${describeAmbiguousCandidates(candidates)}`)
+    .join('\n\n');
+
+  throw new Error(`Found ambiguous cards. Specify a code or XP value to disambiguate each.\n\n${details}`);
+}
+
+function resolveDeckCards(entries, lookup, options = {}) {
+  const attachEntry = Boolean(options.attachEntry);
+  assertNoAmbiguousCards(entries, lookup);
   const cards = [];
   for (const entry of entries) {
     if (entry.code) {
@@ -79,7 +124,7 @@ function resolveDeckCards(entries, lookup) {
       }
       const card = dedupeByCode(codeMatches)[0] || codeMatches[0];
       for (let i = 0; i < entry.count; i++) {
-        cards.push(card);
+        cards.push(attachEntry ? { card, entry } : card);
       }
       continue;
     }
@@ -92,26 +137,9 @@ function resolveDeckCards(entries, lookup) {
 
     const unique = dedupeByCode(matches);
     const candidates = unique.length ? unique : matches;
-    if (candidates.length > 1) {
-      const codes = candidates
-        .map(card => {
-          const headerParts = [card.code || '(no code)', card.name || '(no name)'];
-          if (Number.isFinite(card.xp)) {
-            headerParts.push(`XP ${card.xp}`);
-          }
-          const header = headerParts.filter(Boolean).join(' — ');
-          const text = typeof card.text === 'string' && card.text.trim() ? card.text.trim() : '(no description)';
-          return `- ${header}: ${text}`;
-        })
-        .join('\n');
-      throw new Error(
-        `Card "${entry.name}" is ambiguous. Specify a code or XP value to disambiguate. Candidates:\n${codes}`
-      );
-    }
-
     const card = candidates[0];
     for (let i = 0; i < entry.count; i++) {
-      cards.push(card);
+      cards.push(attachEntry ? { card, entry } : card);
     }
   }
   return cards;
@@ -141,6 +169,8 @@ function buildCardCodeIndex(cards) {
 module.exports = {
   buildCardLookup,
   buildCardCodeIndex,
+  assertNoAmbiguousCards,
+  findAmbiguousEntries,
   loadCardDatabase,
   resolveDeckCards,
 };

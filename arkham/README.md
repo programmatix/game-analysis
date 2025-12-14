@@ -28,8 +28,10 @@ Tag Arkham-specific utility in square brackets so the sampler CLI can track it:
 - `[resources:<n>]` adds that many resources when you see and play the card.
 - `[draw:<n>]` adds that many extra draws.
 - `[permanent]` marks cards that start out and are excluded from deck counts/draw simulations.
+- `[ignorefordecklimit]` excludes the card from deck-size warnings (permanent cards are treated this way automatically).
 - `[weakness]` (or `[basicweakness]`) marks a weakness; opening hand redraws them and shuffles them back in.
 - `[skipproxy]` keeps the card in the list but omits it from the proxy PDF (no image download).
+- `[skipback]` prints only the front of a card and omits its back face from the proxy PDF.
 
 Example: `2 emergency cache[01088] [resources:3]`
 
