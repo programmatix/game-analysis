@@ -11,6 +11,7 @@ function expandDeck(entries, lookup) {
       continue;
     }
     const weakness = annotations.weakness || isCardWeakness(card);
+    const traits = extractTraits(card?.traits);
     for (let i = 0; i < entry.count; i += 1) {
       cards.push({
         name: entry.name,
@@ -22,6 +23,7 @@ function expandDeck(entries, lookup) {
         resourcesPerTurn: annotations.resourcesPerTurn,
         drawPerTurn: annotations.drawPerTurn,
         cost: normalizeCost(card?.cost),
+        traits,
       });
     }
   }
@@ -62,6 +64,16 @@ function dedupeByCode(cards) {
 
 function normalizeCost(cost) {
   return Number.isFinite(cost) ? cost : 0;
+}
+
+function extractTraits(traitsString) {
+  if (!traitsString || typeof traitsString !== 'string') {
+    return [];
+  }
+  return traitsString
+    .split('.')
+    .map(t => t.trim())
+    .filter(t => t.length > 0);
 }
 
 function isCardWeakness(card) {
@@ -129,4 +141,5 @@ module.exports = {
   normalizeAnnotations,
   drawOpeningHandWithWeaknessRedraw,
   shuffle,
+  extractTraits,
 };

@@ -18,6 +18,7 @@ async function buildPdf({
   cardHeightPt,
   cutMarkLengthPt,
   gridSize,
+  scaleFactor,
   deckName,
   face,
   cardIndex,
@@ -41,6 +42,7 @@ async function buildPdf({
     cardHeightPt,
     gapPt,
     gridSize,
+    scaleFactor,
     pageWidth: A4_WIDTH_PT,
     pageHeight: A4_HEIGHT_PT,
   });

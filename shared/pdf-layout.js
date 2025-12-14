@@ -65,33 +65,40 @@ function drawCutMarks(page, { gridSize, originX, originY, cardWidth, cardHeight,
   const left = originX;
   const right = originX + gridSize * cardWidth + gap * (gridSize - 1);
 
+  const pageWidth = page.getWidth();
+  const pageHeight = page.getHeight();
+
   const lineWidth = 0.5;
 
   for (const x of Array.from(edgesX).sort((a, b) => a - b)) {
+    // Top edge marks - extend all the way to page edge
     page.drawLine({
       start: { x, y: top },
-      end: { x, y: top + cutMarkLength },
+      end: { x, y: pageHeight },
       thickness: lineWidth,
       color,
     });
+    // Bottom edge marks - extend all the way to page edge
     page.drawLine({
       start: { x, y: bottom },
-      end: { x, y: bottom - cutMarkLength },
+      end: { x, y: 0 },
       thickness: lineWidth,
       color,
     });
   }
 
   for (const y of Array.from(edgesY).sort((a, b) => a - b)) {
+    // Left edge marks - extend all the way to page edge
     page.drawLine({
       start: { x: left, y },
-      end: { x: left - cutMarkLength, y },
+      end: { x: 0, y },
       thickness: lineWidth,
       color,
     });
+    // Right edge marks - extend all the way to page edge
     page.drawLine({
       start: { x: right, y },
-      end: { x: right + cutMarkLength, y },
+      end: { x: pageWidth, y },
       thickness: lineWidth,
       color,
     });

@@ -20,6 +20,7 @@ function parseCliOptions() {
     .option('--card-width-mm <number>', 'Card width in millimetres', '63.5')
     .option('--card-height-mm <number>', 'Card height in millimetres', '88.9')
     .option('--cut-mark-length-mm <number>', 'Length of cut marks in millimetres', '5')
+    .option('--scale <number>', 'Scale factor for card size (default: 0.99, i.e. 99% for tight sleeves)', '0.99')
     .option('--face <a|b>', 'Card face to render when the code lacks a side', 'a')
     .option('--name <text>', 'Deck name for the PDF filename and footer', 'deck')
     .parse(process.argv);
@@ -30,6 +31,7 @@ function parseCliOptions() {
   const cardWidthPt = mmToPt(parsePositiveNumber('--card-width-mm', options.cardWidthMm));
   const cardHeightPt = mmToPt(parsePositiveNumber('--card-height-mm', options.cardHeightMm));
   const cutMarkLengthPt = mmToPt(parsePositiveNumber('--cut-mark-length-mm', options.cutMarkLengthMm));
+  const scaleFactor = parseScaleFactor(options.scale);
   const face = String(options.face || 'a').toLowerCase() === 'b' ? 'b' : 'a';
   const expectedDeckSize = parseExpectedSize(options.expectedSize);
   const { deckName, outputPath } = resolveNameAndOutput(options.name);
@@ -42,6 +44,7 @@ function parseCliOptions() {
     cardWidthPt,
     cardHeightPt,
     cutMarkLengthPt,
+    scaleFactor,
     face,
     deckName,
     outputPath,
@@ -71,6 +74,14 @@ function parseExpectedSize(raw) {
     throw new Error('--expected-size must be a non-negative integer');
   }
   return parsed === 0 ? null : parsed;
+}
+
+function parseScaleFactor(raw) {
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value <= 0 || value > 1) {
+    throw new Error('--scale must be a positive number between 0 and 1');
+  }
+  return value;
 }
 
 module.exports = {

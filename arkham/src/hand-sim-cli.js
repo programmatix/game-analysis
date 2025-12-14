@@ -74,10 +74,11 @@ async function main() {
   }
 
   const { rows, cardSummaries, byDrawThreshold } = simulateHands(deck, { openingHand, nextDraws, samples, cardsPerTurn });
+  const traitAnalysis = analyzeTraits(deck, deckSize);
   printResults(
     rows,
     { deckSize, openingHand, nextDraws, samples, cardsPerTurn, weaknessCount },
-    { cardSummaries, byDrawThreshold, cardCostSummary }
+    { cardSummaries, byDrawThreshold, cardCostSummary, traitAnalysis }
   );
 }
 
@@ -285,6 +286,80 @@ function getCardKey(card) {
   return card.code || card.name;
 }
 
+function analyzeTraits(deck, deckSize) {
+  const traitCounts = new Map();
+  
+  // Count cards with each trait
+  for (const card of deck) {
+    const traits = card.traits || [];
+    for (const trait of traits) {
+      const count = traitCounts.get(trait) || 0;
+      traitCounts.set(trait, count + 1);
+    }
+  }
+  
+  // Calculate hypergeometric probabilities for each trait
+  const traitStats = Array.from(traitCounts.entries())
+    .map(([trait, count]) => ({
+      trait,
+      count,
+      prob5: hypergeometricProbability(deckSize, count, 5, 1),
+      prob10: hypergeometricProbability(deckSize, count, 10, 1),
+      prob15: hypergeometricProbability(deckSize, count, 15, 1),
+    }))
+    .sort((a, b) => {
+      // Sort by count descending, then by trait name
+      if (b.count !== a.count) return b.count - a.count;
+      return a.trait.localeCompare(b.trait);
+    });
+  
+  return traitStats;
+}
+
+function hypergeometricProbability(N, K, n, k) {
+  // Calculate P(X >= k) using hypergeometric distribution
+  // N = population size (deck size)
+  // K = number of successes in population (cards with trait)
+  // n = sample size (cards drawn: 5, 10, or 15)
+  // k = minimum number of successes we want (1)
+  
+  if (n > N || k > K || k > n) {
+    return 0;
+  }
+  if (K === 0) {
+    return 0;
+  }
+  
+  // P(X >= k) = 1 - P(X = 0) when k = 1
+  // P(X = 0) = C(N-K, n) / C(N, n)
+  if (k === 1) {
+    const probZero = combinations(N - K, n) / combinations(N, n);
+    return 1 - probZero;
+  }
+  
+  // For k > 1, sum probabilities from k to min(n, K)
+  let prob = 0;
+  const maxK = Math.min(n, K);
+  for (let i = k; i <= maxK; i++) {
+    if (n - i <= N - K) {
+      prob += (combinations(K, i) * combinations(N - K, n - i)) / combinations(N, n);
+    }
+  }
+  return prob;
+}
+
+function combinations(n, k) {
+  if (k < 0 || k > n) return 0;
+  if (k === 0 || k === n) return 1;
+  if (k > n - k) k = n - k; // Use symmetry
+  
+  let result = 1;
+  for (let i = 0; i < k; i++) {
+    result = result * (n - i) / (i + 1);
+  }
+  return result;
+}
+
 function summarizeCardCosts(deck) {
   const seen = new Map();
   for (const card of deck) {
@@ -320,7 +395,7 @@ function summarizeCardCosts(deck) {
 function printResults(
   rows,
   { deckSize, openingHand, nextDraws, samples, cardsPerTurn, weaknessCount },
-  { cardSummaries, byDrawThreshold, cardCostSummary }
+  { cardSummaries, byDrawThreshold, cardCostSummary, traitAnalysis }
 ) {
   console.log('Arkham hand sampler (Monte Carlo)');
   console.log(`Deck size: ${deckSize}`);
@@ -384,6 +459,11 @@ function printResults(
     console.log('');
     printCardContributions(cardSummaries, byDrawThreshold);
   }
+
+  if (traitAnalysis && traitAnalysis.length) {
+    console.log('');
+    printTraitAnalysis(traitAnalysis);
+  }
 }
 
 function formatRow(cells, widths) {
@@ -434,6 +514,33 @@ function printCardCosts(cardCosts) {
 
   cardCosts.forEach(card => {
     console.log(formatRow([card.label, formatNumber(card.cost), card.count, formatNumber(card.cumulativeCost)], widths));
+  });
+}
+
+function printTraitAnalysis(traitAnalysis) {
+  console.log('Trait analysis:');
+  console.log('- Hypergeometric probability of drawing at least one card with each trait.');
+  console.log('- Probabilities shown for first 5, 10, and 15 cards drawn.');
+  console.log('- Sorted by count descending, then by trait name.');
+  console.log('');
+
+  const headers = ['Trait', 'Count', 'Prob in 5', 'Prob in 10', 'Prob in 15'];
+  const widths = [24, 10, 12, 12, 12];
+  console.log(formatRow(headers, widths));
+
+  traitAnalysis.forEach(stat => {
+    console.log(
+      formatRow(
+        [
+          stat.trait,
+          stat.count,
+          formatPercent(stat.prob5),
+          formatPercent(stat.prob10),
+          formatPercent(stat.prob15),
+        ],
+        widths
+      )
+    );
   });
 }
 

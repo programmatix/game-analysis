@@ -56,6 +56,7 @@ async function main() {
     cardHeightPt: options.cardHeightPt,
     cutMarkLengthPt: options.cutMarkLengthPt,
     gridSize: options.gridSize,
+    scaleFactor: options.scaleFactor,
     deckName: options.deckName,
     face: options.face,
     cardIndex,
