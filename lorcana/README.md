@@ -64,6 +64,8 @@ The first run downloads each needed card once and stores it under `.cache/card-a
 
 The default 3×3 grid mirrors classic proxy sheets with true-size cards and 1 mm of blackout padding between each proxy. If you’d like more cards per page (up to the extreme 9×9 limit), pass a larger `--grid-size`. The CLI keeps real card dimensions until the requested grid (plus padding) would overflow the physical page, then warns you and scales uniformly to keep everything centered. Use `--name` to choose both the exported filename (`<name>.pdf`) and the footer text automatically—the same name feeds the rarest-card showcase slot, which can optionally include the author, archetype, and date lines. Need to rapidly iterate on that hero card? Add `--showcase-output hero.png` to dump the styled PNG alongside the PDF, or tack on `--showcase-only` to skip the sheet entirely while you tweak metadata.
 
+Deck lists allow inline comments starting with `#` or `//`, plus block comments wrapped in `/* ... */`.
+
 ### Showcase slot
 
 - Finds the rarest card in the list using Lorcana rarity tiers.

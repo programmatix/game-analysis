@@ -21,12 +21,14 @@ async function readDeckText(filePath) {
 
 function parseDeckList(text, options = {}) {
   const { baseDir = process.cwd(), _includeStack = [] } = options;
-  const lines = text.split(/\r?\n/);
+  const sanitizedText = stripComments(text);
+  const lines = sanitizedText.split(/\r?\n/);
   const entries = [];
 
   for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('//')) {
+    const withoutLineComment = stripLineComment(line);
+    const trimmed = withoutLineComment.trim();
+    if (!trimmed) {
       continue;
     }
 
@@ -103,6 +105,32 @@ function sanitizeFileName(text) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/gi, '-')
     .replace(/^-+|-+$/g, '');
+}
+
+function stripComments(text) {
+  const withoutBlockComments = text.replace(/\/\*[\s\S]*?\*\//g, '');
+  return withoutBlockComments;
+}
+
+function stripLineComment(line) {
+  const markers = ['//', '#'];
+  let cutoff = line.length;
+
+  for (const marker of markers) {
+    let searchStart = 0;
+    while (searchStart < cutoff) {
+      const idx = line.indexOf(marker, searchStart);
+      if (idx === -1 || idx >= cutoff) break;
+      const before = idx === 0 ? '' : line[idx - 1];
+      if (idx === 0 || /\s/.test(before)) {
+        cutoff = Math.min(cutoff, idx);
+        break;
+      }
+      searchStart = idx + marker.length;
+    }
+  }
+
+  return line.slice(0, cutoff);
 }
 
 function resolveNameAndOutput(nameOption) {
