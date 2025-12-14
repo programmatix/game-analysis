@@ -81,48 +81,108 @@ async function main() {
 function buildRows(openingHandCards, drawPile, { openingHand, nextDraws, cardsPerTurn }) {
   const rows = [];
   const seen = openingHandCards.slice();
-  rows.push(buildRow('Opening hand', seen, 0, { openingHand, cardsPerTurn }));
+  const seenAtDrawIndex = new Map();
+  
+  // Track when cards in opening hand were seen (drawIndex 0)
+  for (const card of openingHandCards) {
+    const key = getCardKey(card);
+    if (!seenAtDrawIndex.has(key)) {
+      seenAtDrawIndex.set(key, 0);
+    }
+  }
+  
+  rows.push(buildRow('Opening hand', seen, seenAtDrawIndex, 0, { openingHand, cardsPerTurn }));
 
   for (let drawIndex = 1; drawIndex <= nextDraws; drawIndex += 1) {
     const nextCard = drawPile[drawIndex - 1];
     seen.push(nextCard);
-    rows.push(buildRow(`Draw ${drawIndex}`, seen, drawIndex, { openingHand, cardsPerTurn }));
+    const key = getCardKey(nextCard);
+    if (!seenAtDrawIndex.has(key)) {
+      seenAtDrawIndex.set(key, drawIndex);
+    }
+    rows.push(buildRow(`Draw ${drawIndex}`, seen, seenAtDrawIndex, drawIndex, { openingHand, cardsPerTurn }));
   }
 
   return rows;
 }
 
-function buildRow(label, seenCards, drawsSoFar, { openingHand, cardsPerTurn }) {
-  const totals = summarizeCards(seenCards);
+function getCardKey(card) {
+  return card.code || card.name;
+}
+
+function buildRow(label, seenCards, seenAtDrawIndex, drawsSoFar, { openingHand, cardsPerTurn }) {
+  const totals = summarizeCards(seenCards, seenAtDrawIndex, drawsSoFar);
   const baseResources = 5 + drawsSoFar;
   const baseDraws = openingHand + drawsSoFar;
-  const resourceTotal = baseResources + totals.resourceBonus;
+  const resourceTotal = baseResources + totals.resourceBonus + totals.resourcesPerTurnBonus;
   const cardsPlayed = cardsPerTurn * drawsSoFar;
-  const cardsInHand = Math.max(0, baseDraws + totals.drawBonus - cardsPlayed);
+  const cardsInHand = Math.max(0, baseDraws + totals.drawBonus + totals.drawPerTurnBonus - cardsPlayed);
 
   return {
     label,
     weapons: totals.weapons,
-    resourceBonus: totals.resourceBonus,
+    resourceBonus: totals.resourceBonus + totals.resourcesPerTurnBonus,
     resourceTotal,
     costTotal: totals.cost,
     resourceNet: resourceTotal - totals.cost,
-    drawBonus: totals.drawBonus,
-    drawTotal: baseDraws + totals.drawBonus,
+    drawBonus: totals.drawBonus + totals.drawPerTurnBonus,
+    drawTotal: baseDraws + totals.drawBonus + totals.drawPerTurnBonus,
     cardsInHand,
   };
 }
 
-function summarizeCards(seenCards) {
-  return seenCards.reduce(
+function summarizeCards(seenCards, seenAtDrawIndex, drawsSoFar) {
+  const base = seenCards.reduce(
     (acc, card) => ({
       weapons: acc.weapons + (card.weapon ? 1 : 0),
       resourceBonus: acc.resourceBonus + (Number(card.resources) || 0),
       drawBonus: acc.drawBonus + (Number(card.draw) || 0),
       cost: acc.cost + (Number(card.cost) || 0),
     }),
-    { weapons: 0, resourceBonus: 0, drawBonus: 0, cost: 0 }
+    { weapons: 0, resourceBonus: 0, drawBonus: 0, cost: 0, resourcesPerTurnBonus: 0, drawPerTurnBonus: 0 }
   );
+
+  // Calculate per-turn resources: for each card with resourcesPerTurn,
+  // calculate how many turns it has been active
+  const seenCardsWithPerTurn = new Set();
+  for (const card of seenCards) {
+    const resourcesPerTurn = Number(card.resourcesPerTurn) || 0;
+    if (resourcesPerTurn !== 0) {
+      const key = getCardKey(card);
+      if (!seenCardsWithPerTurn.has(key)) {
+        seenCardsWithPerTurn.add(key);
+        const seenAt = seenAtDrawIndex.get(key);
+        if (seenAt !== undefined) {
+          const turnsActive = drawsSoFar - seenAt;
+          if (turnsActive > 0) {
+            base.resourcesPerTurnBonus += resourcesPerTurn * turnsActive;
+          }
+        }
+      }
+    }
+  }
+
+  // Calculate per-turn draws: for each card with drawPerTurn,
+  // calculate how many turns it has been active
+  const seenCardsWithDrawPerTurn = new Set();
+  for (const card of seenCards) {
+    const drawPerTurn = Number(card.drawPerTurn) || 0;
+    if (drawPerTurn !== 0) {
+      const key = getCardKey(card);
+      if (!seenCardsWithDrawPerTurn.has(key)) {
+        seenCardsWithDrawPerTurn.add(key);
+        const seenAt = seenAtDrawIndex.get(key);
+        if (seenAt !== undefined) {
+          const turnsActive = drawsSoFar - seenAt;
+          if (turnsActive > 0) {
+            base.drawPerTurnBonus += drawPerTurn * turnsActive;
+          }
+        }
+      }
+    }
+  }
+
+  return base;
 }
 
 function printSample(rows, summary, detail) {
@@ -137,8 +197,8 @@ function printSample(rows, summary, detail) {
     console.log(`Weaknesses: ${weaknessCount} (redraw during opening hand, then shuffled back)`);
   }
   console.log('');
-  console.log('Res total = 5 start + upkeep (+1 per draw) + resources on drawn cards.');
-  console.log('Draw total = opening hand + draws so far + draw on drawn cards.');
+  console.log('Res total = 5 start + upkeep (+1 per draw) + resources on drawn cards (one-time + per-turn).');
+  console.log('Draw total = opening hand + draws so far + draw on drawn cards (one-time + per-turn).');
   console.log(`Hand size assumes you play ${cardsPerTurn} cards per turn.`);
   console.log('Draws below show one literal shuffle, no averaging.');
   console.log('');
@@ -195,7 +255,9 @@ function describeCard(card) {
   if (card.weapon) tags.push('weapon');
   if (card.weakness) tags.push('weakness');
   if (card.resources) tags.push(`res+${card.resources}`);
+  if (card.resourcesPerTurn) tags.push(`res/turn+${card.resourcesPerTurn}`);
   if (card.draw) tags.push(`draw+${card.draw}`);
+  if (card.drawPerTurn) tags.push(`draw/turn+${card.drawPerTurn}`);
   if (Number.isFinite(card.cost) && card.cost !== 0) tags.push(`cost ${card.cost}`);
 
   const suffix = tags.length ? ` (${tags.join(', ')})` : '';

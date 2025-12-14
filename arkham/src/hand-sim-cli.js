@@ -86,7 +86,9 @@ function simulateHands(deck, { openingHand, nextDraws, samples, cardsPerTurn }) 
     weapons: 0,
     weaponHits: 0,
     resourceBonus: 0,
+    resourcesPerTurnTotal: 0,
     drawBonus: 0,
+    drawPerTurnTotal: 0,
     cost: 0,
   }));
   const cardStats = buildCardStatMap(deck);
@@ -96,10 +98,19 @@ function simulateHands(deck, { openingHand, nextDraws, samples, cardsPerTurn }) 
     const order = shuffle(deck);
     const { openingHandCards, drawPile } = drawOpeningHandWithWeaknessRedraw(order, openingHand);
     const seen = openingHandCards.slice();
+    const seenAtDrawIndex = new Map();
     const openingSeenThisSample = new Set();
     const byDrawSeenThisSample = new Set();
 
-    addRowTotals(totals, seen, 0);
+    // Track when cards in opening hand were seen (drawIndex 0)
+    for (const card of openingHandCards) {
+      const key = getCardKey(card);
+      if (!seenAtDrawIndex.has(key)) {
+        seenAtDrawIndex.set(key, 0);
+      }
+    }
+
+    addRowTotals(totals, seen, seenAtDrawIndex, 0);
     for (const card of openingHandCards) {
       recordCardStats(cardStats, card, { openingSeenThisSample, byDrawSeenThisSample, byDrawThreshold, drawIndex: 0 });
     }
@@ -107,8 +118,12 @@ function simulateHands(deck, { openingHand, nextDraws, samples, cardsPerTurn }) 
     for (let drawIndex = 1; drawIndex <= nextDraws; drawIndex += 1) {
       const nextCard = drawPile[drawIndex - 1];
       seen.push(nextCard);
+      const key = getCardKey(nextCard);
+      if (!seenAtDrawIndex.has(key)) {
+        seenAtDrawIndex.set(key, drawIndex);
+      }
       recordCardStats(cardStats, nextCard, { openingSeenThisSample, byDrawSeenThisSample, byDrawThreshold, drawIndex });
-      addRowTotals(totals, seen, drawIndex);
+      addRowTotals(totals, seen, seenAtDrawIndex, drawIndex);
     }
   }
 
@@ -119,21 +134,26 @@ function simulateHands(deck, { openingHand, nextDraws, samples, cardsPerTurn }) 
     const turns = drawsSoFar;
     const cardsPlayed = cardsPerTurn * turns;
     const resourceBonus = row.resourceBonus / samples;
+    const resourcesPerTurnBonus = row.resourcesPerTurnTotal / samples;
     const drawBonus = row.drawBonus / samples;
+    const drawPerTurnBonus = row.drawPerTurnTotal / samples;
     const costTotal = row.cost / samples;
-    const resourceTotal = baseResources + resourceBonus;
-    const cardsInHand = Math.max(0, baseDraws + drawBonus - cardsPlayed);
+    const resourceTotal = baseResources + resourceBonus + resourcesPerTurnBonus;
+    const cardsInHand = Math.max(0, baseDraws + drawBonus + drawPerTurnBonus - cardsPlayed);
 
     return {
       label: idx === 0 ? 'Opening hand' : `Draw ${idx}`,
       avgWeapons: row.weapons / samples,
       weaponHitRate: row.weaponHits / samples,
       avgResourceBonus: resourceBonus,
+      avgResourcesPerTurnBonus: resourcesPerTurnBonus,
       avgResourceTotal: resourceTotal,
       avgCostTotal: costTotal,
       avgResourceNet: resourceTotal - costTotal,
       avgDrawBonus: drawBonus,
-      avgDrawTotal: baseDraws + drawBonus,
+      avgDrawPerTurnBonus: drawPerTurnBonus,
+      avgDrawTotal: baseDraws + drawBonus + drawPerTurnBonus,
+      avgCardsSeen: baseDraws,
       avgCardsInHand: cardsInHand,
     };
   });
@@ -142,10 +162,12 @@ function simulateHands(deck, { openingHand, nextDraws, samples, cardsPerTurn }) 
   return { rows, cardSummaries, byDrawThreshold };
 }
 
-function addRowTotals(totals, seenCards, rowIndex) {
+function addRowTotals(totals, seenCards, seenAtDrawIndex, rowIndex) {
   let weapons = 0;
   let resourceBonus = 0;
+  let resourcesPerTurnTotal = 0;
   let drawBonus = 0;
+  let drawPerTurnTotal = 0;
   let costTotal = 0;
 
   for (const card of seenCards) {
@@ -157,10 +179,54 @@ function addRowTotals(totals, seenCards, rowIndex) {
     costTotal += Number(card.cost) || 0;
   }
 
+  // Calculate per-turn resources: for each card with resourcesPerTurn,
+  // calculate how many turns it has been active (rowIndex - when it was first seen)
+  const seenCardsWithPerTurn = new Set();
+  for (const card of seenCards) {
+    const resourcesPerTurn = Number(card.resourcesPerTurn) || 0;
+    if (resourcesPerTurn !== 0) {
+      const key = getCardKey(card);
+      if (!seenCardsWithPerTurn.has(key)) {
+        seenCardsWithPerTurn.add(key);
+        const seenAt = seenAtDrawIndex.get(key);
+        if (seenAt !== undefined) {
+          // Number of turns the card has been active (turns since it was first seen)
+          // If seen at drawIndex 0 (opening hand), by rowIndex 1 it has been active 1 turn
+          const turnsActive = rowIndex - seenAt;
+          if (turnsActive > 0) {
+            resourcesPerTurnTotal += resourcesPerTurn * turnsActive;
+          }
+        }
+      }
+    }
+  }
+
+  // Calculate per-turn draws: for each card with drawPerTurn,
+  // calculate how many turns it has been active
+  const seenCardsWithDrawPerTurn = new Set();
+  for (const card of seenCards) {
+    const drawPerTurn = Number(card.drawPerTurn) || 0;
+    if (drawPerTurn !== 0) {
+      const key = getCardKey(card);
+      if (!seenCardsWithDrawPerTurn.has(key)) {
+        seenCardsWithDrawPerTurn.add(key);
+        const seenAt = seenAtDrawIndex.get(key);
+        if (seenAt !== undefined) {
+          const turnsActive = rowIndex - seenAt;
+          if (turnsActive > 0) {
+            drawPerTurnTotal += drawPerTurn * turnsActive;
+          }
+        }
+      }
+    }
+  }
+
   totals[rowIndex].weapons += weapons;
   totals[rowIndex].weaponHits += weapons > 0 ? 1 : 0;
   totals[rowIndex].resourceBonus += resourceBonus;
+  totals[rowIndex].resourcesPerTurnTotal += resourcesPerTurnTotal;
   totals[rowIndex].drawBonus += drawBonus;
+  totals[rowIndex].drawPerTurnTotal += drawPerTurnTotal;
   totals[rowIndex].cost += costTotal;
 }
 
@@ -265,8 +331,8 @@ function printResults(
     console.log(`Weaknesses: ${weaknessCount} (redraw during opening hand, then shuffled back)`);
   }
   console.log('');
-  console.log('Res total = 5 start + upkeep (+1 per draw) + resources on drawn cards.');
-  console.log('Draw total = opening hand + draws so far + draw on drawn cards.');
+  console.log('Res total = 5 start + upkeep (+1 per draw) + resources on drawn cards (one-time + per-turn).');
+  console.log('Draw total = opening hand + draws so far + draw on drawn cards (one-time + per-turn).');
   console.log(`Hand size assumes you play ${cardsPerTurn} cards per turn.`);
   console.log('');
   printColumnLegend({ averaged: true });
@@ -281,23 +347,27 @@ function printResults(
     'Res net',
     'Draw gain',
     'Draw total',
+    'Cards seen',
     'Cards in hand',
   ];
-  const widths = [16, 10, 12, 12, 12, 12, 12, 12, 12, 14];
+  const widths = [16, 10, 12, 12, 12, 12, 12, 12, 12, 12, 14];
   console.log(formatRow(headers, widths));
   for (const row of rows) {
+    const totalResourceBonus = row.avgResourceBonus + row.avgResourcesPerTurnBonus;
+    const totalDrawBonus = row.avgDrawBonus + row.avgDrawPerTurnBonus;
     console.log(
       formatRow(
         [
           row.label,
           formatNumber(row.avgWeapons),
           formatPercent(row.weaponHitRate),
-          formatNumber(row.avgResourceBonus),
+          formatNumber(totalResourceBonus),
           formatNumber(row.avgResourceTotal),
           formatNumber(row.avgCostTotal),
           formatNumber(row.avgResourceNet),
-          formatNumber(row.avgDrawBonus),
+          formatNumber(totalDrawBonus),
           formatNumber(row.avgDrawTotal),
+          formatNumber(row.avgCardsSeen),
           formatNumber(row.avgCardsInHand),
         ],
         widths

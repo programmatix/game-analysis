@@ -19,6 +19,8 @@ function expandDeck(entries, lookup) {
         weakness,
         resources: annotations.resources,
         draw: annotations.draw,
+        resourcesPerTurn: annotations.resourcesPerTurn,
+        drawPerTurn: annotations.drawPerTurn,
         cost: normalizeCost(card?.cost),
       });
     }
@@ -77,8 +79,10 @@ function normalizeAnnotations(annotations) {
     || keywordSet.has('basicweakness');
   const resources = Number(annotations?.resources) || 0;
   const draw = Number(annotations?.draw) || 0;
+  const resourcesPerTurn = Number(annotations?.resourcesPerTurn) || 0;
+  const drawPerTurn = Number(annotations?.drawPerTurn) || 0;
 
-  return { weapon, permanent, weakness, resources, draw };
+  return { weapon, permanent, weakness, resources, draw, resourcesPerTurn, drawPerTurn };
 }
 
 function drawOpeningHandWithWeaknessRedraw(deck, openingHand) {

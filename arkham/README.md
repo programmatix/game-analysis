@@ -26,7 +26,9 @@ Tag Arkham-specific utility in square brackets so the sampler CLI can track it:
 
 - `[weapon]` marks a card as a weapon.
 - `[resources:<n>]` adds that many resources when you see and play the card.
+- `[resourcesperturn:<n>]` simulates getting that many resources per turn after the card is seen (accumulates over turns).
 - `[draw:<n>]` adds that many extra draws.
+- `[drawperturn:<n>]` simulates getting that many draws per turn after the card is seen (accumulates over turns).
 - `[permanent]` marks cards that start out and are excluded from deck counts/draw simulations.
 - `[ignorefordecklimit]` excludes the card from deck-size warnings (permanent cards are treated this way automatically).
 - `[weakness]` (or `[basicweakness]`) marks a weakness; opening hand redraws them and shuffles them back in.

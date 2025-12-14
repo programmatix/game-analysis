@@ -109,6 +109,8 @@ function parseNameWithCode(text) {
   let code;
   let resourceTotal = 0;
   let drawTotal = 0;
+  let resourcesPerTurnTotal = 0;
+  let drawPerTurnTotal = 0;
   const keywordSet = new Set();
 
   for (const token of bracketTokens) {
@@ -125,6 +127,10 @@ function parseNameWithCode(text) {
         resourceTotal += modifier.value;
       } else if (modifier.type === 'draw') {
         drawTotal += modifier.value;
+      } else if (modifier.type === 'resourcesperturn') {
+        resourcesPerTurnTotal += modifier.value;
+      } else if (modifier.type === 'drawperturn') {
+        drawPerTurnTotal += modifier.value;
       }
       continue;
     }
@@ -140,6 +146,12 @@ function parseNameWithCode(text) {
   }
   if (drawTotal !== 0) {
     annotations.draw = drawTotal;
+  }
+  if (resourcesPerTurnTotal !== 0) {
+    annotations.resourcesPerTurn = resourcesPerTurnTotal;
+  }
+  if (drawPerTurnTotal !== 0) {
+    annotations.drawPerTurn = drawPerTurnTotal;
   }
   if (keywordSet.size) {
     annotations.keywords = Array.from(keywordSet);
@@ -260,7 +272,7 @@ function parseModifier(value) {
 
   const [, key, numberText] = match;
   const normalizedKey = key.toLowerCase();
-  if (normalizedKey !== 'resources' && normalizedKey !== 'draw') {
+  if (normalizedKey !== 'resources' && normalizedKey !== 'draw' && normalizedKey !== 'resourcesperturn' && normalizedKey !== 'drawperturn') {
     return null;
   }
 
