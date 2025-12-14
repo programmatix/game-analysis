@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "description": "",
   "bin": {
-    "lorcana-proxy": "src/cli.js"
+    "lorcana-proxy": "src/cli.js",
+    "lorcana-grid-template": "src/grid-template.js",
+    "lorcana-ruler-grid": "src/ruler-grid.js"
   },
   "main": "index.js",
   "scripts": {
