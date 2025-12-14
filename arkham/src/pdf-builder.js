@@ -165,12 +165,22 @@ function buildPagePlan(cardEntries, cardsPerPage) {
     });
 
     if (slice.some(entry => entry.backFace)) {
+      const backSlots = fillSlots(
+        slice,
+        cardsPerPage,
+        entry => (entry.backFace ? { card: entry.backCard || entry.card, face: entry.backFace } : null)
+      );
+      // Reverse each row for double-sided printing alignment
+      // When the page is flipped, the back needs to be reversed row by row
+      const gridSize = Math.sqrt(cardsPerPage);
+      for (let rowStart = 0; rowStart < backSlots.length; rowStart += gridSize) {
+        const rowEnd = Math.min(rowStart + gridSize, backSlots.length);
+        const row = backSlots.slice(rowStart, rowEnd);
+        row.reverse();
+        backSlots.splice(rowStart, row.length, ...row);
+      }
       pages.push({
-        slots: fillSlots(
-          slice,
-          cardsPerPage,
-          entry => (entry.backFace ? { card: entry.backCard || entry.card, face: entry.backFace } : null)
-        ),
+        slots: backSlots,
         isBack: true,
       });
     }
