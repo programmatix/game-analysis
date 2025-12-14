@@ -59,6 +59,7 @@ async function main() {
   const cards = await loadCardDatabase(path.resolve(opts.dataDir));
   const lookup = buildCardLookup(cards);
   const deck = expandDeck(entries, lookup);
+  const cardCostSummary = summarizeCardCosts(deck);
   const deckSize = deck.length;
   const { openingHand, nextDraws, samples, cardsPerTurn } = opts;
   const weaknessCount = deck.filter(card => card.weakness).length;
@@ -73,7 +74,11 @@ async function main() {
   }
 
   const { rows, cardSummaries, byDrawThreshold } = simulateHands(deck, { openingHand, nextDraws, samples, cardsPerTurn });
-  printResults(rows, { deckSize, openingHand, nextDraws, samples, cardsPerTurn, weaknessCount }, { cardSummaries, byDrawThreshold });
+  printResults(
+    rows,
+    { deckSize, openingHand, nextDraws, samples, cardsPerTurn, weaknessCount },
+    { cardSummaries, byDrawThreshold, cardCostSummary }
+  );
 }
 
 function simulateHands(deck, { openingHand, nextDraws, samples, cardsPerTurn }) {
@@ -214,7 +219,43 @@ function getCardKey(card) {
   return card.code || card.name;
 }
 
-function printResults(rows, { deckSize, openingHand, nextDraws, samples, cardsPerTurn, weaknessCount }, { cardSummaries, byDrawThreshold }) {
+function summarizeCardCosts(deck) {
+  const seen = new Map();
+  for (const card of deck) {
+    const cost = Number(card.cost) || 0;
+    if (cost <= 0) continue;
+
+    const key = getCardKey(card);
+    const existing = seen.get(key);
+    if (existing) {
+      existing.count += 1;
+      continue;
+    }
+
+    seen.set(key, {
+      label: card.code ? `${card.name} (${card.code})` : card.name,
+      cost,
+      count: 1,
+    });
+  }
+
+  let cumulativeCost = 0;
+  return Array.from(seen.values())
+    .sort((a, b) => {
+      if (b.cost !== a.cost) return b.cost - a.cost;
+      return a.label.localeCompare(b.label);
+    })
+    .map(card => {
+      cumulativeCost += card.cost;
+      return { ...card, cumulativeCost };
+    });
+}
+
+function printResults(
+  rows,
+  { deckSize, openingHand, nextDraws, samples, cardsPerTurn, weaknessCount },
+  { cardSummaries, byDrawThreshold, cardCostSummary }
+) {
   console.log('Arkham hand sampler (Monte Carlo)');
   console.log(`Deck size: ${deckSize}`);
   console.log(`Opening hand: ${openingHand}`);
@@ -264,6 +305,11 @@ function printResults(rows, { deckSize, openingHand, nextDraws, samples, cardsPe
     );
   }
 
+  if (cardCostSummary.length) {
+    console.log('');
+    printCardCosts(cardCostSummary);
+  }
+
   if (cardSummaries.length) {
     console.log('');
     printCardContributions(cardSummaries, byDrawThreshold);
@@ -304,6 +350,20 @@ function printCardContributions(cardSummaries, byDrawThreshold) {
         widths
       )
     );
+  });
+}
+
+function printCardCosts(cardCosts) {
+  console.log('Resource costs (one copy each, costs > 0):');
+  console.log('- Sorted by resource cost descending.');
+  console.log('');
+
+  const headers = ['Card', 'Cost', 'Count', 'Cumulative 1x'];
+  const widths = [32, 10, 10, 16];
+  console.log(formatRow(headers, widths));
+
+  cardCosts.forEach(card => {
+    console.log(formatRow([card.label, formatNumber(card.cost), card.count, formatNumber(card.cumulativeCost)], widths));
   });
 }
 
