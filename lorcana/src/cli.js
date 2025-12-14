@@ -52,7 +52,8 @@ async function main() {
     throw new Error('Deck list is empty. Provide --input or pipe data to stdin.');
   }
 
-  const deckEntries = parseDeckList(deckText);
+  const deckBaseDir = options.input ? path.dirname(path.resolve(options.input)) : process.cwd();
+  const deckEntries = parseDeckList(deckText, { baseDir: deckBaseDir });
   if (!deckEntries.length) {
     throw new Error('No valid deck entries were found.');
   }

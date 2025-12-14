@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 const fs = require('fs');
+const path = require('path');
 const { readDeckText, parseDeckList } = require('../../shared/deck-utils');
 const { parseCliOptions } = require('./options');
 const { loadCardDatabase, buildCardLookup, resolveDeckCards } = require('./card-data');
@@ -12,7 +13,8 @@ async function main() {
     throw new Error('Deck list is empty. Provide --input or pipe data to stdin.');
   }
 
-  const deckEntries = parseDeckList(deckText);
+  const deckBaseDir = options.input ? path.dirname(path.resolve(options.input)) : process.cwd();
+  const deckEntries = parseDeckList(deckText, { baseDir: deckBaseDir });
   if (!deckEntries.length) {
     throw new Error('No valid deck entries were found.');
   }

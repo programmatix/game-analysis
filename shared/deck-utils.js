@@ -19,13 +19,46 @@ async function readDeckText(filePath) {
   });
 }
 
-function parseDeckList(text) {
+function parseDeckList(text, options = {}) {
+  const { baseDir = process.cwd(), _includeStack = [] } = options;
   const lines = text.split(/\r?\n/);
   const entries = [];
 
   for (const line of lines) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('//')) {
+      continue;
+    }
+
+    const includeMatch = /^\[include:([^\]]+)\]$/i.exec(trimmed);
+    if (includeMatch) {
+      const includeTarget = includeMatch[1].trim();
+      if (!includeTarget) {
+        console.warn(`Skipping line "${line}" - include target is missing`);
+        continue;
+      }
+
+      const includePath = resolveIncludePath(includeTarget, baseDir);
+      const normalizedIncludePath = path.normalize(includePath);
+
+      if (_includeStack.includes(normalizedIncludePath)) {
+        console.warn(`Skipping include "${includeTarget}" - detected a circular reference`);
+        continue;
+      }
+
+      let includeText;
+      try {
+        includeText = fs.readFileSync(includePath, 'utf8');
+      } catch (err) {
+        console.warn(`Skipping include "${includeTarget}" - ${err instanceof Error ? err.message : 'unable to read file'}`);
+        continue;
+      }
+
+      const nestedEntries = parseDeckList(includeText, {
+        baseDir: path.dirname(includePath),
+        _includeStack: [..._includeStack, normalizedIncludePath],
+      });
+      entries.push(...nestedEntries);
       continue;
     }
 
@@ -81,6 +114,12 @@ function resolveNameAndOutput(nameOption) {
     deckName: labelBase || 'deck',
     outputPath,
   };
+}
+
+function resolveIncludePath(target, baseDir) {
+  const hasExtension = Boolean(path.extname(target));
+  const fileName = hasExtension ? target : `${target}.txt`;
+  return path.resolve(baseDir || process.cwd(), fileName);
 }
 
 module.exports = {
