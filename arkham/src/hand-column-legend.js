@@ -1,8 +1,9 @@
 function printColumnLegend({ averaged } = {}) {
   const legendLines = [
     '- Step: opening hand or draw number.',
-    averaged ? '- Weapons: average number of weapon cards drawn so far.' : '- Weapons: weapon cards seen so far.',
-    averaged ? '- Res drawn: average resources granted by seen cards.' : '- Res drawn: resources granted by seen cards.',
+    averaged ? '- Weapons: average number of weapon cards drawn so far.  (Note this won`\'t match the hypergeometric output, as I can whiff completely, but can also draw multiple weapons raising the avg)' : '- Weapons: weapon cards seen so far.',
+    averaged ? '- Weapon ≥1%: chance you have seen at least one weapon by this point. (Hypergeometric output - probs more useful for weapons)' : '- Weapon ≥1%: unused in per-sample output.',
+    '- Res drawn: average resources granted by seen cards.',
     '- Res total: 5 start + upkeep + Res drawn.',
     averaged ? '- Cost total: average resource cost of seen cards.' : '- Cost total: resource cost of seen cards.',
     '- Res net: Res total minus Cost total.',

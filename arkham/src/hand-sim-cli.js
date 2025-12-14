@@ -72,32 +72,42 @@ async function main() {
     throw new Error('Opening hand plus next draws cannot exceed the deck size.');
   }
 
-  const rows = simulateHands(deck, { openingHand, nextDraws, samples, cardsPerTurn });
-  printResults(rows, { deckSize, openingHand, nextDraws, samples, cardsPerTurn, weaknessCount });
+  const { rows, cardSummaries, byDrawThreshold } = simulateHands(deck, { openingHand, nextDraws, samples, cardsPerTurn });
+  printResults(rows, { deckSize, openingHand, nextDraws, samples, cardsPerTurn, weaknessCount }, { cardSummaries, byDrawThreshold });
 }
 
 function simulateHands(deck, { openingHand, nextDraws, samples, cardsPerTurn }) {
   const totals = Array.from({ length: nextDraws + 1 }, () => ({
     weapons: 0,
+    weaponHits: 0,
     resourceBonus: 0,
     drawBonus: 0,
     cost: 0,
   }));
+  const cardStats = buildCardStatMap(deck);
+  const byDrawThreshold = Math.min(nextDraws, 10);
 
   for (let i = 0; i < samples; i += 1) {
     const order = shuffle(deck);
     const { openingHandCards, drawPile } = drawOpeningHandWithWeaknessRedraw(order, openingHand);
     const seen = openingHandCards.slice();
+    const openingSeenThisSample = new Set();
+    const byDrawSeenThisSample = new Set();
+
     addRowTotals(totals, seen, 0);
+    for (const card of openingHandCards) {
+      recordCardStats(cardStats, card, { openingSeenThisSample, byDrawSeenThisSample, byDrawThreshold, drawIndex: 0 });
+    }
 
     for (let drawIndex = 1; drawIndex <= nextDraws; drawIndex += 1) {
       const nextCard = drawPile[drawIndex - 1];
       seen.push(nextCard);
+      recordCardStats(cardStats, nextCard, { openingSeenThisSample, byDrawSeenThisSample, byDrawThreshold, drawIndex });
       addRowTotals(totals, seen, drawIndex);
     }
   }
 
-  return totals.map((row, idx) => {
+  const rows = totals.map((row, idx) => {
     const drawsSoFar = idx;
     const baseResources = 5 + drawsSoFar;
     const baseDraws = openingHand + drawsSoFar;
@@ -112,6 +122,7 @@ function simulateHands(deck, { openingHand, nextDraws, samples, cardsPerTurn }) 
     return {
       label: idx === 0 ? 'Opening hand' : `Draw ${idx}`,
       avgWeapons: row.weapons / samples,
+      weaponHitRate: row.weaponHits / samples,
       avgResourceBonus: resourceBonus,
       avgResourceTotal: resourceTotal,
       avgCostTotal: costTotal,
@@ -121,6 +132,9 @@ function simulateHands(deck, { openingHand, nextDraws, samples, cardsPerTurn }) 
       avgCardsInHand: cardsInHand,
     };
   });
+
+  const cardSummaries = summarizeCardStats(cardStats, samples);
+  return { rows, cardSummaries, byDrawThreshold };
 }
 
 function addRowTotals(totals, seenCards, rowIndex) {
@@ -139,12 +153,68 @@ function addRowTotals(totals, seenCards, rowIndex) {
   }
 
   totals[rowIndex].weapons += weapons;
+  totals[rowIndex].weaponHits += weapons > 0 ? 1 : 0;
   totals[rowIndex].resourceBonus += resourceBonus;
   totals[rowIndex].drawBonus += drawBonus;
   totals[rowIndex].cost += costTotal;
 }
 
-function printResults(rows, { deckSize, openingHand, nextDraws, samples, cardsPerTurn, weaknessCount }) {
+function buildCardStatMap(deck) {
+  const map = new Map();
+  for (const card of deck) {
+    const key = getCardKey(card);
+    if (!map.has(key)) {
+      map.set(key, {
+        name: card.name,
+        code: card.code,
+        openingSeenSamples: 0,
+        byDrawSeenSamples: 0,
+        totalDrawGain: 0,
+      });
+    }
+  }
+  return map;
+}
+
+function recordCardStats(cardStats, card, { openingSeenThisSample, byDrawSeenThisSample, byDrawThreshold, drawIndex }) {
+  const key = getCardKey(card);
+  const stats = cardStats.get(key);
+  if (!stats) return;
+
+  const drawGain = Number(card.draw) || 0;
+  stats.totalDrawGain += drawGain;
+
+  if (drawIndex === 0 && !openingSeenThisSample.has(key)) {
+    stats.openingSeenSamples += 1;
+    openingSeenThisSample.add(key);
+  }
+
+  if (drawIndex <= byDrawThreshold && !byDrawSeenThisSample.has(key)) {
+    stats.byDrawSeenSamples += 1;
+    byDrawSeenThisSample.add(key);
+  }
+}
+
+function summarizeCardStats(cardStats, samples) {
+  return Array.from(cardStats.values())
+    .map(stat => ({
+      label: stat.code ? `${stat.name} (${stat.code})` : stat.name,
+      openingRate: stat.openingSeenSamples / samples,
+      byDrawRate: stat.byDrawSeenSamples / samples,
+      avgDrawGain: stat.totalDrawGain / samples,
+    }))
+    .sort((a, b) => {
+      if (b.byDrawRate !== a.byDrawRate) return b.byDrawRate - a.byDrawRate;
+      if (b.openingRate !== a.openingRate) return b.openingRate - a.openingRate;
+      return a.label.localeCompare(b.label);
+    });
+}
+
+function getCardKey(card) {
+  return card.code || card.name;
+}
+
+function printResults(rows, { deckSize, openingHand, nextDraws, samples, cardsPerTurn, weaknessCount }, { cardSummaries, byDrawThreshold }) {
   console.log('Arkham hand sampler (Monte Carlo)');
   console.log(`Deck size: ${deckSize}`);
   console.log(`Opening hand: ${openingHand}`);
@@ -163,6 +233,7 @@ function printResults(rows, { deckSize, openingHand, nextDraws, samples, cardsPe
   const headers = [
     'Step',
     'Weapons',
+    'Weapon ≥1%',
     'Res drawn',
     'Res total',
     'Cost total',
@@ -171,7 +242,7 @@ function printResults(rows, { deckSize, openingHand, nextDraws, samples, cardsPe
     'Draw total',
     'Cards in hand',
   ];
-  const widths = [16, 10, 12, 12, 12, 12, 12, 12, 14];
+  const widths = [16, 10, 12, 12, 12, 12, 12, 12, 12, 14];
   console.log(formatRow(headers, widths));
   for (const row of rows) {
     console.log(
@@ -179,6 +250,7 @@ function printResults(rows, { deckSize, openingHand, nextDraws, samples, cardsPe
         [
           row.label,
           formatNumber(row.avgWeapons),
+          formatPercent(row.weaponHitRate),
           formatNumber(row.avgResourceBonus),
           formatNumber(row.avgResourceTotal),
           formatNumber(row.avgCostTotal),
@@ -190,6 +262,11 @@ function printResults(rows, { deckSize, openingHand, nextDraws, samples, cardsPe
         widths
       )
     );
+  }
+
+  if (cardSummaries.length) {
+    console.log('');
+    printCardContributions(cardSummaries, byDrawThreshold);
   }
 }
 
@@ -204,6 +281,30 @@ function formatRow(cells, widths) {
 
 function formatNumber(value) {
   return Number.isFinite(value) ? value.toFixed(2) : '0.00';
+}
+
+function formatPercent(value) {
+  return Number.isFinite(value) ? `${(value * 100).toFixed(1)}%` : '0.0%';
+}
+
+function printCardContributions(cardSummaries, byDrawThreshold) {
+  console.log('Card contributions (per-sample averages):');
+  console.log('- Percentages = share of samples where at least one copy appeared.');
+  console.log(`- By draw ${byDrawThreshold}: opening hand + first ${byDrawThreshold} draws.`);
+  console.log('');
+
+  const headers = ['Card', 'In opening %', `By draw ${byDrawThreshold} %`, 'Avg draw gain'];
+  const widths = [32, 16, 18, 16];
+  console.log(formatRow(headers, widths));
+
+  cardSummaries.forEach(card => {
+    console.log(
+      formatRow(
+        [card.label, formatPercent(card.openingRate), formatPercent(card.byDrawRate), formatNumber(card.avgDrawGain)],
+        widths
+      )
+    );
+  });
 }
 
 main().catch(err => {
