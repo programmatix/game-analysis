@@ -50,6 +50,7 @@ async function buildPdf({
     const page = pdfDoc.addPage([A4_WIDTH_PT, A4_HEIGHT_PT]);
 
     const { scaledWidth, scaledHeight, scaledGap, originX, originY } = layout;
+    const bleedPt = Math.min(mmToPt(1), scaledGap / 2);
 
     for (let slotIndex = 0; slotIndex < cardsPerPage; slotIndex++) {
       const row = Math.floor(slotIndex / gridSize);
@@ -61,10 +62,10 @@ async function buildPdf({
       if (!slot || !slot.card) continue;
 
       drawCardBackground(page, {
-        x,
-        y,
-        width: scaledWidth,
-        height: scaledHeight,
+        x: x - bleedPt,
+        y: y - bleedPt,
+        width: scaledWidth + bleedPt * 2,
+        height: scaledHeight + bleedPt * 2,
         color: cardBackgroundColor,
       });
       const imagePath = await ensureCardImage(slot.card, cacheDir, face, { face: slot.face });
