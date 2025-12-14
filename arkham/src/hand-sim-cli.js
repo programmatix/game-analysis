@@ -287,25 +287,32 @@ function getCardKey(card) {
 }
 
 function analyzeTraits(deck, deckSize) {
-  const traitCounts = new Map();
+  const traitData = new Map();
   
-  // Count cards with each trait
+  // Count cards with each trait and track card names
   for (const card of deck) {
     const traits = card.traits || [];
+    const cardLabel = card.code ? `${card.name} (${card.code})` : card.name;
     for (const trait of traits) {
-      const count = traitCounts.get(trait) || 0;
-      traitCounts.set(trait, count + 1);
+      let data = traitData.get(trait);
+      if (!data) {
+        data = { count: 0, cardNames: new Set() };
+        traitData.set(trait, data);
+      }
+      data.count += 1;
+      data.cardNames.add(cardLabel);
     }
   }
   
   // Calculate hypergeometric probabilities for each trait
-  const traitStats = Array.from(traitCounts.entries())
-    .map(([trait, count]) => ({
+  const traitStats = Array.from(traitData.entries())
+    .map(([trait, data]) => ({
       trait,
-      count,
-      prob5: hypergeometricProbability(deckSize, count, 5, 1),
-      prob10: hypergeometricProbability(deckSize, count, 10, 1),
-      prob15: hypergeometricProbability(deckSize, count, 15, 1),
+      count: data.count,
+      cardNames: Array.from(data.cardNames).sort(),
+      prob5: hypergeometricProbability(deckSize, data.count, 5, 1),
+      prob10: hypergeometricProbability(deckSize, data.count, 10, 1),
+      prob15: hypergeometricProbability(deckSize, data.count, 15, 1),
     }))
     .sort((a, b) => {
       // Sort by count descending, then by trait name
@@ -541,6 +548,7 @@ function printTraitAnalysis(traitAnalysis) {
         widths
       )
     );
+    console.log(`  Cards: ${stat.cardNames.join(', ')}`);
   });
 }
 
