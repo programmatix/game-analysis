@@ -30,8 +30,11 @@ function computeScale(cardWidthPt, cardHeightPt, gapPt, gridSize, pageWidth = A4
   return scale;
 }
 
-function computeGridLayout({ cardWidthPt, cardHeightPt, gapPt, gridSize, pageWidth = A4_WIDTH_PT, pageHeight = A4_HEIGHT_PT }) {
-  const scale = computeScale(cardWidthPt, cardHeightPt, gapPt, gridSize, pageWidth, pageHeight);
+function computeGridLayout({ cardWidthPt, cardHeightPt, gapPt, gridSize, scaleFactor = 1.0, pageWidth = A4_WIDTH_PT, pageHeight = A4_HEIGHT_PT }) {
+  // scaleFactor defaults to 1.0 (100%), but can be set to e.g. 0.99 (99%) to print slightly smaller
+  // This is useful when using tight-fitting sleeves that require cards to be slightly undersized
+  const baseScale = computeScale(cardWidthPt, cardHeightPt, gapPt, gridSize, pageWidth, pageHeight);
+  const scale = baseScale * scaleFactor;
   const scaledWidth = cardWidthPt * scale;
   const scaledHeight = cardHeightPt * scale;
   const scaledGap = gapPt * scale;

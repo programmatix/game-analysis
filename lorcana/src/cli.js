@@ -36,6 +36,7 @@ program
   .option('--card-width-mm <number>', 'Card width in millimetres', '63.5')
   .option('--card-height-mm <number>', 'Card height in millimetres', '88.9')
   .option('--cut-mark-length-mm <number>', 'Length of cut marks in millimetres', '5')
+  .option('--scale <number>', 'Scale factor for card size (default: 0.99, i.e. 99% for tight sleeves)', '0.99')
   .option('--name <text>', 'Deck name for the PDF filename and title page', 'deck')
   .option('--author <text>', 'Deck author shown on the title card')
   .option('--archetype <text>', 'Deck archetype shown on the title card')
@@ -85,6 +86,7 @@ async function main() {
   const cardWidthMm = Number(options.cardWidthMm);
   const cardHeightMm = Number(options.cardHeightMm);
   const cutMarkLengthMm = Number(options.cutMarkLengthMm);
+  const scaleFactor = Number(options.scale);
 
   if (!Number.isFinite(cardWidthMm) || cardWidthMm <= 0) {
     throw new Error('--card-width-mm must be a positive number');
@@ -94,6 +96,9 @@ async function main() {
   }
   if (!Number.isFinite(cutMarkLengthMm) || cutMarkLengthMm <= 0) {
     throw new Error('--cut-mark-length-mm must be a positive number');
+  }
+  if (!Number.isFinite(scaleFactor) || scaleFactor <= 0 || scaleFactor > 1) {
+    throw new Error('--scale must be a positive number between 0 and 1');
   }
 
   const cardWidthPt = mmToPt(cardWidthMm);
@@ -131,6 +136,7 @@ async function main() {
     cardHeightPt,
     cutMarkLengthPt,
     gridSize,
+    scaleFactor,
     cacheDir,
     deckMeta,
     showcaseEntry,
@@ -199,7 +205,7 @@ function rarityRank(rarity) {
   return idx === -1 ? RARITY_PRIORITY.length : idx;
 }
 
-async function buildPdf({ cards, cardWidthPt, cardHeightPt, cutMarkLengthPt, gridSize, cacheDir, deckMeta, showcaseEntry }) {
+async function buildPdf({ cards, cardWidthPt, cardHeightPt, cutMarkLengthPt, gridSize, scaleFactor, cacheDir, deckMeta, showcaseEntry }) {
   const pdfDoc = await PDFDocument.create();
   const fonts = {
     regular: await pdfDoc.embedFont(StandardFonts.Helvetica),
@@ -243,6 +249,7 @@ async function buildPdf({ cards, cardWidthPt, cardHeightPt, cutMarkLengthPt, gri
       cardHeightPt,
       gapPt,
       gridSize,
+      scaleFactor,
       pageWidth: A4_WIDTH_PT,
       pageHeight: A4_HEIGHT_PT,
     });
