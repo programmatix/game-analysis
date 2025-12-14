@@ -4,6 +4,7 @@ const { program } = require('commander');
 const { readDeckText, parseDeckList } = require('../../shared/deck-utils');
 const { loadCardDatabase, buildCardLookup } = require('./card-data');
 const { expandDeck, drawOpeningHandWithWeaknessRedraw, shuffle } = require('./hand-sim-helpers');
+const { printColumnLegend } = require('./hand-column-legend');
 
 function positiveInt(value, label) {
   const num = Number.parseInt(value, 10);
@@ -141,6 +142,7 @@ function printSample(rows, summary, detail) {
   console.log(`Hand size assumes you play ${cardsPerTurn} cards per turn.`);
   console.log('Draws below show one literal shuffle, no averaging.');
   console.log('');
+  printColumnLegend({ averaged: false });
 
   const headers = [
     'Step',

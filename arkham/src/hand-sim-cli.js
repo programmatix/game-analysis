@@ -4,6 +4,7 @@ const { program } = require('commander');
 const { readDeckText, parseDeckList } = require('../../shared/deck-utils');
 const { loadCardDatabase, buildCardLookup } = require('./card-data');
 const { expandDeck, drawOpeningHandWithWeaknessRedraw, shuffle } = require('./hand-sim-helpers');
+const { printColumnLegend } = require('./hand-column-legend');
 
 function positiveInt(value, label) {
   const num = Number.parseInt(value, 10);
@@ -157,14 +158,7 @@ function printResults(rows, { deckSize, openingHand, nextDraws, samples, cardsPe
   console.log('Draw total = opening hand + draws so far + draw on drawn cards.');
   console.log(`Hand size assumes you play ${cardsPerTurn} cards per turn.`);
   console.log('');
-  console.log('Columns:');
-  console.log('- Weapons: average number of weapon cards drawn so far.');
-  console.log('- Res drawn / Res total: resource gain from drawn cards / with upkeep and starting 5.');
-  console.log('- Cost total: total resource cost of all drawn cards.');
-  console.log('- Res net: resources left after paying all costs.');
-  console.log('- Draw gain / Draw total: extra draws from drawn cards / total cards seen.');
-  console.log('- Cards in hand: projected hand size after playing cards each turn.');
-  console.log('');
+  printColumnLegend({ averaged: true });
 
   const headers = [
     'Step',
