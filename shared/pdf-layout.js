@@ -3,7 +3,7 @@ const A4_WIDTH_MM = 210;
 const A4_HEIGHT_MM = 297;
 const A4_WIDTH_PT = A4_WIDTH_MM * MM_TO_PT;
 const A4_HEIGHT_PT = A4_HEIGHT_MM * MM_TO_PT;
-const GAP_BETWEEN_CARDS_MM = 1;
+const GAP_BETWEEN_CARDS_MM = 0.5;
 
 function mmToPt(value) {
   if (!Number.isFinite(value) || value < 0) {
