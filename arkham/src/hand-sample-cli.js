@@ -95,6 +95,7 @@ function buildRow(label, seenCards, drawsSoFar, { openingHand, cardsPerTurn }) {
   const totals = summarizeCards(seenCards);
   const baseResources = 5 + drawsSoFar;
   const baseDraws = openingHand + drawsSoFar;
+  const resourceTotal = baseResources + totals.resourceBonus;
   const cardsPlayed = cardsPerTurn * drawsSoFar;
   const cardsInHand = Math.max(0, baseDraws + totals.drawBonus - cardsPlayed);
 
@@ -102,10 +103,11 @@ function buildRow(label, seenCards, drawsSoFar, { openingHand, cardsPerTurn }) {
     label,
     weapons: totals.weapons,
     resourceBonus: totals.resourceBonus,
-    resourceTotal: baseResources + totals.resourceBonus,
+    resourceTotal,
+    costTotal: totals.cost,
+    resourceNet: resourceTotal - totals.cost,
     drawBonus: totals.drawBonus,
     drawTotal: baseDraws + totals.drawBonus,
-    costTotal: totals.cost,
     cardsInHand,
   };
 }
@@ -140,8 +142,18 @@ function printSample(rows, summary, detail) {
   console.log('Draws below show one literal shuffle, no averaging.');
   console.log('');
 
-  const headers = ['Step', 'Weapons', 'Res drawn', 'Res total', 'Draw gain', 'Draw total', 'Cost total', 'Cards in hand'];
-  const widths = [16, 10, 12, 12, 12, 12, 12, 14];
+  const headers = [
+    'Step',
+    'Weapons',
+    'Res drawn',
+    'Res total',
+    'Cost total',
+    'Res net',
+    'Draw gain',
+    'Draw total',
+    'Cards in hand',
+  ];
+  const widths = [16, 10, 12, 12, 12, 12, 12, 12, 14];
   console.log(formatRow(headers, widths));
   for (const row of rows) {
     console.log(
@@ -151,9 +163,10 @@ function printSample(rows, summary, detail) {
           formatNumber(row.weapons),
           formatNumber(row.resourceBonus),
           formatNumber(row.resourceTotal),
+          formatNumber(row.costTotal),
+          formatNumber(row.resourceNet),
           formatNumber(row.drawBonus),
           formatNumber(row.drawTotal),
-          formatNumber(row.costTotal),
           formatNumber(row.cardsInHand),
         ],
         widths

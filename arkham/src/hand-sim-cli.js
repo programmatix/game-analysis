@@ -105,16 +105,18 @@ function simulateHands(deck, { openingHand, nextDraws, samples, cardsPerTurn }) 
     const resourceBonus = row.resourceBonus / samples;
     const drawBonus = row.drawBonus / samples;
     const costTotal = row.cost / samples;
+    const resourceTotal = baseResources + resourceBonus;
     const cardsInHand = Math.max(0, baseDraws + drawBonus - cardsPlayed);
 
     return {
       label: idx === 0 ? 'Opening hand' : `Draw ${idx}`,
       avgWeapons: row.weapons / samples,
       avgResourceBonus: resourceBonus,
-      avgResourceTotal: baseResources + resourceBonus,
+      avgResourceTotal: resourceTotal,
+      avgCostTotal: costTotal,
+      avgResourceNet: resourceTotal - costTotal,
       avgDrawBonus: drawBonus,
       avgDrawTotal: baseDraws + drawBonus,
-      avgCostTotal: costTotal,
       avgCardsInHand: cardsInHand,
     };
   });
@@ -158,13 +160,24 @@ function printResults(rows, { deckSize, openingHand, nextDraws, samples, cardsPe
   console.log('Columns:');
   console.log('- Weapons: average number of weapon cards drawn so far.');
   console.log('- Res drawn / Res total: resource gain from drawn cards / with upkeep and starting 5.');
-  console.log('- Draw gain / Draw total: extra draws from drawn cards / total cards seen.');
   console.log('- Cost total: total resource cost of all drawn cards.');
+  console.log('- Res net: resources left after paying all costs.');
+  console.log('- Draw gain / Draw total: extra draws from drawn cards / total cards seen.');
   console.log('- Cards in hand: projected hand size after playing cards each turn.');
   console.log('');
 
-  const headers = ['Step', 'Weapons', 'Res drawn', 'Res total', 'Draw gain', 'Draw total', 'Cost total', 'Cards in hand'];
-  const widths = [16, 10, 12, 12, 12, 12, 12, 14];
+  const headers = [
+    'Step',
+    'Weapons',
+    'Res drawn',
+    'Res total',
+    'Cost total',
+    'Res net',
+    'Draw gain',
+    'Draw total',
+    'Cards in hand',
+  ];
+  const widths = [16, 10, 12, 12, 12, 12, 12, 12, 14];
   console.log(formatRow(headers, widths));
   for (const row of rows) {
     console.log(
@@ -174,9 +187,10 @@ function printResults(rows, { deckSize, openingHand, nextDraws, samples, cardsPe
           formatNumber(row.avgWeapons),
           formatNumber(row.avgResourceBonus),
           formatNumber(row.avgResourceTotal),
+          formatNumber(row.avgCostTotal),
+          formatNumber(row.avgResourceNet),
           formatNumber(row.avgDrawBonus),
           formatNumber(row.avgDrawTotal),
-          formatNumber(row.avgCostTotal),
           formatNumber(row.avgCardsInHand),
         ],
         widths
