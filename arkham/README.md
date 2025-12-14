@@ -27,3 +27,11 @@ Options:
 - `--face <a|b>`: Which face to use when a code lacks an explicit side (defaults to `a`).
 
 Deck lines support comments starting with `#` or `//`. Ambiguous names (like cards with multiple XP versions) can be disambiguated with a code (`01030`) or an XP suffix (`Lucky! (2)`).
+
+## Decklist format
+
+```
+2 knife
+1 sophie[03009]
+[include:partial-mark]
+```

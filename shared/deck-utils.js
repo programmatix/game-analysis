@@ -35,17 +35,30 @@ function parseDeckList(text) {
       continue;
     }
 
-    const [, countStr, name] = match;
+    const [, countStr, rawName] = match;
     const count = Number(countStr);
     if (!Number.isFinite(count) || count <= 0) {
       console.warn(`Skipping line "${line}" - count must be positive`);
       continue;
     }
 
-    entries.push({ count, name: name.trim() });
+    const { name, code } = parseNameWithCode(rawName);
+    if (!name) {
+      console.warn(`Skipping line "${line}" - card name is missing`);
+      continue;
+    }
+
+    entries.push({ count, name, code });
   }
 
   return entries;
+}
+
+function parseNameWithCode(text) {
+  const match = /^(.*?)(?:\s*\[([^\]]+)\])?$/.exec(text.trim());
+  const name = match && match[1] ? match[1].trim() : '';
+  const code = match && match[2] ? match[2].trim() : undefined;
+  return { name, code };
 }
 
 function normalizeName(text) {
