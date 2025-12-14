@@ -2,3 +2,4 @@
 **/*.txt
 .cache/
 node_modules/
+**/TODO.md

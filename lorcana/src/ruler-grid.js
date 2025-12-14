@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { Command } = require('commander');
 const { PDFDocument, rgb, StandardFonts } = require('pdf-lib');
-const { A4_WIDTH_MM, A4_HEIGHT_MM, A4_WIDTH_PT, A4_HEIGHT_PT, mmToPt } = require('./pdf-layout');
+const { A4_WIDTH_MM, A4_HEIGHT_MM, A4_WIDTH_PT, A4_HEIGHT_PT, mmToPt } = require('../../shared/pdf-layout');
 
 const program = new Command();
 program

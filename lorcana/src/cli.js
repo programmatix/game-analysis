@@ -14,7 +14,8 @@ const {
   drawCutMarks,
   drawRulers,
   drawPageLabel,
-} = require('./pdf-layout');
+} = require('../../shared/pdf-layout');
+const { readDeckText, parseDeckList, normalizeName, sanitizeFileName, resolveNameAndOutput } = require('../../shared/deck-utils');
 const DEFAULT_CACHE_DIR = path.join('.cache', 'card-art');
 const ASSET_CACHE_DIR = path.join('.cache', 'assets');
 const ARTWORK_CROP = { x: 0.07, y: 0.0, width: 0.86, height: 0.50 };
@@ -138,53 +139,6 @@ async function main() {
   console.log(`Created ${outputPath}`);
 }
 
-async function readDeckText(filePath) {
-  if (filePath) {
-    return fs.promises.readFile(path.resolve(filePath), 'utf8');
-  }
-
-  return new Promise((resolve, reject) => {
-    let data = '';
-    process.stdin.setEncoding('utf8');
-    process.stdin.on('data', chunk => (data += chunk));
-    process.stdin.on('end', () => resolve(data));
-    process.stdin.on('error', reject);
-
-    if (process.stdin.isTTY) {
-      resolve('');
-    }
-  });
-}
-
-function parseDeckList(text) {
-  const lines = text.split(/\r?\n/);
-  const entries = [];
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('//')) {
-      continue;
-    }
-
-    const match = /^(\d+)\s+(.+)$/.exec(trimmed);
-    if (!match) {
-      console.warn(`Skipping line "${line}" - expected format "<count> <card name>"`);
-      continue;
-    }
-
-    const [, countStr, name] = match;
-    const count = Number(countStr);
-    if (!Number.isFinite(count) || count <= 0) {
-      console.warn(`Skipping line "${line}" - count must be positive`);
-      continue;
-    }
-
-    entries.push({ count, name: name.trim() });
-  }
-
-  return entries;
-}
-
 async function loadCardDatabase(allCardsPath) {
   const raw = await fs.promises.readFile(path.resolve(allCardsPath), 'utf8');
   const parsed = JSON.parse(raw);
@@ -195,9 +149,9 @@ async function loadCardDatabase(allCardsPath) {
   const lookup = new Map();
   for (const card of parsed.cards) {
     const keys = new Set();
-    if (card.fullName) keys.add(normalize(card.fullName));
-    if (card.name) keys.add(normalize(card.name));
-    if (card.simpleName) keys.add(normalize(card.simpleName));
+    if (card.fullName) keys.add(normalizeName(card.fullName));
+    if (card.name) keys.add(normalizeName(card.name));
+    if (card.simpleName) keys.add(normalizeName(card.simpleName));
 
     for (const key of keys) {
       if (!key) continue;
@@ -207,14 +161,10 @@ async function loadCardDatabase(allCardsPath) {
   return lookup;
 }
 
-function normalize(text) {
-  return text ? text.toLowerCase().replace(/\s+/g, ' ').trim() : '';
-}
-
 function resolveDeckCards(entries, lookup) {
   const cards = [];
   for (const entry of entries) {
-    const key = normalize(entry.name);
+    const key = normalizeName(entry.name);
     const card = lookup.get(key);
     if (!card) {
       throw new Error(`Card "${entry.name}" was not found in allCards.json`);
@@ -593,24 +543,6 @@ function drawShowcaseCardSlot({ page, showcaseEntry, x, y, width, height }) {
   });
 }
 
-
-function resolveNameAndOutput(nameOption) {
-  const rawInput = nameOption && nameOption.trim() ? nameOption.trim() : 'deck';
-  const hasPdfExtension = /\.pdf$/i.test(rawInput);
-  const outputPath = path.resolve(hasPdfExtension ? rawInput : `${rawInput}.pdf`);
-  const labelBase = path.basename(rawInput).replace(/\.pdf$/i, '');
-  return {
-    deckName: labelBase || 'deck',
-    outputPath,
-  };
-}
-
-function sanitizeFileName(text) {
-  return (text || '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/gi, '-')
-    .replace(/^-+|-+$/g, '');
-}
 
 function fitFontSizeToWidth(
   text,

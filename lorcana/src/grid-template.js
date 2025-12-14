@@ -12,7 +12,7 @@ const {
   drawCutMarks,
   drawRulers,
   drawPageLabel,
-} = require('./pdf-layout');
+} = require('../../shared/pdf-layout');
 
 const program = new Command();
 program

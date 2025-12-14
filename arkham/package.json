@@ -1,0 +1,17 @@
+{
+  "name": "arkham-proxy",
+  "version": "1.0.0",
+  "description": "CLI to render Arkham Horror: The Card Game proxy decks as printable PDFs.",
+  "bin": {
+    "arkham-proxy": "src/cli.js"
+  },
+  "type": "commonjs",
+  "scripts": {
+    "test": "echo \"No tests defined\" && exit 0"
+  },
+  "dependencies": {
+    "commander": "^14.0.2",
+    "pdf-lib": "^1.17.1",
+    "sharp": "^0.34.5"
+  }
+}
