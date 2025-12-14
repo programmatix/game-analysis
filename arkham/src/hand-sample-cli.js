@@ -32,13 +32,12 @@ function positiveNumber(value, label) {
 const DEFAULT_DATA_DIR = path.join(__dirname, '..', 'arkhamdb-json-data');
 
 program
-  .name('arkham-hand-sim')
-  .description('Sample Arkham opening hands and early draws from an annotated deck list')
+  .name('arkham-hand-sample')
+  .description('Draw a single Arkham opening hand and early draws from an annotated deck list')
   .option('-i, --input <file>', 'Deck list file (defaults to stdin)')
   .option('--data-dir <dir>', 'Path to arkhamdb-json-data root', DEFAULT_DATA_DIR)
   .option('-o, --opening-hand <n>', 'Opening hand size', v => positiveInt(v, 'opening hand'), 5)
-  .option('-n, --next-draws <n>', 'Number of draws to simulate after the opening hand', v => nonNegativeInt(v, 'next draws'), 10)
-  .option('-s, --samples <n>', 'Number of simulated hands', v => positiveInt(v, 'samples'), 10000)
+  .option('-n, --next-draws <n>', 'Number of draws to play out after the opening hand', v => nonNegativeInt(v, 'next draws'), 10)
   .option('--cards-per-turn <n>', 'Cards spent per turn when projecting hand size', v => positiveNumber(v, 'cards per turn'), 1.5)
   .parse(process.argv);
 
@@ -59,7 +58,7 @@ async function main() {
   const lookup = buildCardLookup(cards);
   const deck = expandDeck(entries, lookup);
   const deckSize = deck.length;
-  const { openingHand, nextDraws, samples, cardsPerTurn } = opts;
+  const { openingHand, nextDraws, cardsPerTurn } = opts;
   const weaknessCount = deck.filter(card => card.weakness).length;
   const nonWeakCount = deckSize - weaknessCount;
 
@@ -71,82 +70,66 @@ async function main() {
     throw new Error('Opening hand plus next draws cannot exceed the deck size.');
   }
 
-  const rows = simulateHands(deck, { openingHand, nextDraws, samples, cardsPerTurn });
-  printResults(rows, { deckSize, openingHand, nextDraws, samples, cardsPerTurn, weaknessCount });
+  const order = shuffle(deck);
+  const { openingHandCards, drawPile } = drawOpeningHandWithWeaknessRedraw(order, openingHand);
+  const rows = buildRows(openingHandCards, drawPile, { openingHand, nextDraws, cardsPerTurn });
+
+  printSample(rows, { deckSize, openingHand, nextDraws, cardsPerTurn, weaknessCount }, { openingHandCards, drawPile });
 }
 
-function simulateHands(deck, { openingHand, nextDraws, samples, cardsPerTurn }) {
-  const totals = Array.from({ length: nextDraws + 1 }, () => ({
-    weapons: 0,
-    resourceBonus: 0,
-    drawBonus: 0,
-    cost: 0,
-  }));
+function buildRows(openingHandCards, drawPile, { openingHand, nextDraws, cardsPerTurn }) {
+  const rows = [];
+  const seen = openingHandCards.slice();
+  rows.push(buildRow('Opening hand', seen, 0, { openingHand, cardsPerTurn }));
 
-  for (let i = 0; i < samples; i += 1) {
-    const order = shuffle(deck);
-    const { openingHandCards, drawPile } = drawOpeningHandWithWeaknessRedraw(order, openingHand);
-    const seen = openingHandCards.slice();
-    addRowTotals(totals, seen, 0);
-
-    for (let drawIndex = 1; drawIndex <= nextDraws; drawIndex += 1) {
-      const nextCard = drawPile[drawIndex - 1];
-      seen.push(nextCard);
-      addRowTotals(totals, seen, drawIndex);
-    }
+  for (let drawIndex = 1; drawIndex <= nextDraws; drawIndex += 1) {
+    const nextCard = drawPile[drawIndex - 1];
+    seen.push(nextCard);
+    rows.push(buildRow(`Draw ${drawIndex}`, seen, drawIndex, { openingHand, cardsPerTurn }));
   }
 
-  return totals.map((row, idx) => {
-    const drawsSoFar = idx;
-    const baseResources = 5 + drawsSoFar;
-    const baseDraws = openingHand + drawsSoFar;
-    const turns = drawsSoFar;
-    const cardsPlayed = cardsPerTurn * turns;
-    const resourceBonus = row.resourceBonus / samples;
-    const drawBonus = row.drawBonus / samples;
-    const costTotal = row.cost / samples;
-    const cardsInHand = Math.max(0, baseDraws + drawBonus - cardsPlayed);
-
-    return {
-      label: idx === 0 ? 'Opening hand' : `Draw ${idx}`,
-      avgWeapons: row.weapons / samples,
-      avgResourceBonus: resourceBonus,
-      avgResourceTotal: baseResources + resourceBonus,
-      avgDrawBonus: drawBonus,
-      avgDrawTotal: baseDraws + drawBonus,
-      avgCostTotal: costTotal,
-      avgCardsInHand: cardsInHand,
-    };
-  });
+  return rows;
 }
 
-function addRowTotals(totals, seenCards, rowIndex) {
-  let weapons = 0;
-  let resourceBonus = 0;
-  let drawBonus = 0;
-  let costTotal = 0;
+function buildRow(label, seenCards, drawsSoFar, { openingHand, cardsPerTurn }) {
+  const totals = summarizeCards(seenCards);
+  const baseResources = 5 + drawsSoFar;
+  const baseDraws = openingHand + drawsSoFar;
+  const cardsPlayed = cardsPerTurn * drawsSoFar;
+  const cardsInHand = Math.max(0, baseDraws + totals.drawBonus - cardsPlayed);
 
-  for (const card of seenCards) {
-    if (card.weapon) {
-      weapons += 1;
-    }
-    resourceBonus += Number(card.resources) || 0;
-    drawBonus += Number(card.draw) || 0;
-    costTotal += Number(card.cost) || 0;
-  }
-
-  totals[rowIndex].weapons += weapons;
-  totals[rowIndex].resourceBonus += resourceBonus;
-  totals[rowIndex].drawBonus += drawBonus;
-  totals[rowIndex].cost += costTotal;
+  return {
+    label,
+    weapons: totals.weapons,
+    resourceBonus: totals.resourceBonus,
+    resourceTotal: baseResources + totals.resourceBonus,
+    drawBonus: totals.drawBonus,
+    drawTotal: baseDraws + totals.drawBonus,
+    costTotal: totals.cost,
+    cardsInHand,
+  };
 }
 
-function printResults(rows, { deckSize, openingHand, nextDraws, samples, cardsPerTurn, weaknessCount }) {
-  console.log('Arkham hand sampler (Monte Carlo)');
+function summarizeCards(seenCards) {
+  return seenCards.reduce(
+    (acc, card) => ({
+      weapons: acc.weapons + (card.weapon ? 1 : 0),
+      resourceBonus: acc.resourceBonus + (Number(card.resources) || 0),
+      drawBonus: acc.drawBonus + (Number(card.draw) || 0),
+      cost: acc.cost + (Number(card.cost) || 0),
+    }),
+    { weapons: 0, resourceBonus: 0, drawBonus: 0, cost: 0 }
+  );
+}
+
+function printSample(rows, summary, detail) {
+  const { deckSize, openingHand, nextDraws, cardsPerTurn, weaknessCount } = summary;
+  const { openingHandCards, drawPile } = detail;
+
+  console.log('Arkham hand sample (single run)');
   console.log(`Deck size: ${deckSize}`);
   console.log(`Opening hand: ${openingHand}`);
   console.log(`Next draws: ${nextDraws}`);
-  console.log(`Samples: ${samples}`);
   if (weaknessCount) {
     console.log(`Weaknesses: ${weaknessCount} (redraw during opening hand, then shuffled back)`);
   }
@@ -154,13 +137,7 @@ function printResults(rows, { deckSize, openingHand, nextDraws, samples, cardsPe
   console.log('Res total = 5 start + upkeep (+1 per draw) + resources on drawn cards.');
   console.log('Draw total = opening hand + draws so far + draw on drawn cards.');
   console.log(`Hand size assumes you play ${cardsPerTurn} cards per turn.`);
-  console.log('');
-  console.log('Columns:');
-  console.log('- Weapons: average number of weapon cards drawn so far.');
-  console.log('- Res drawn / Res total: resource gain from drawn cards / with upkeep and starting 5.');
-  console.log('- Draw gain / Draw total: extra draws from drawn cards / total cards seen.');
-  console.log('- Cost total: total resource cost of all drawn cards.');
-  console.log('- Cards in hand: projected hand size after playing cards each turn.');
+  console.log('Draws below show one literal shuffle, no averaging.');
   console.log('');
 
   const headers = ['Step', 'Weapons', 'Res drawn', 'Res total', 'Draw gain', 'Draw total', 'Cost total', 'Cards in hand'];
@@ -171,18 +148,43 @@ function printResults(rows, { deckSize, openingHand, nextDraws, samples, cardsPe
       formatRow(
         [
           row.label,
-          formatNumber(row.avgWeapons),
-          formatNumber(row.avgResourceBonus),
-          formatNumber(row.avgResourceTotal),
-          formatNumber(row.avgDrawBonus),
-          formatNumber(row.avgDrawTotal),
-          formatNumber(row.avgCostTotal),
-          formatNumber(row.avgCardsInHand),
+          formatNumber(row.weapons),
+          formatNumber(row.resourceBonus),
+          formatNumber(row.resourceTotal),
+          formatNumber(row.drawBonus),
+          formatNumber(row.drawTotal),
+          formatNumber(row.costTotal),
+          formatNumber(row.cardsInHand),
         ],
         widths
       )
     );
   }
+
+  console.log('');
+  console.log('Opening hand cards:');
+  openingHandCards.forEach(card => {
+    console.log(`- ${describeCard(card)}`);
+  });
+
+  console.log('');
+  console.log('Draws:');
+  for (let i = 0; i < nextDraws; i += 1) {
+    const card = drawPile[i];
+    console.log(`- Draw ${i + 1}: ${describeCard(card)}`);
+  }
+}
+
+function describeCard(card) {
+  const tags = [];
+  if (card.weapon) tags.push('weapon');
+  if (card.weakness) tags.push('weakness');
+  if (card.resources) tags.push(`res+${card.resources}`);
+  if (card.draw) tags.push(`draw+${card.draw}`);
+  if (Number.isFinite(card.cost) && card.cost !== 0) tags.push(`cost ${card.cost}`);
+
+  const suffix = tags.length ? ` (${tags.join(', ')})` : '';
+  return `${card.name}${suffix}`;
 }
 
 function formatRow(cells, widths) {

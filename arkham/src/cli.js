@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { readDeckText, parseDeckList, countDeckEntries } = require('../../shared/deck-utils');
 const { parseCliOptions } = require('./options');
-const { loadCardDatabase, buildCardLookup, resolveDeckCards } = require('./card-data');
+const { loadCardDatabase, buildCardLookup, buildCardCodeIndex, resolveDeckCards } = require('./card-data');
 const { buildPdf } = require('./pdf-builder');
 
 async function main() {
@@ -32,7 +32,16 @@ async function main() {
 
   const cards = await loadCardDatabase(options.dataDir);
   const lookup = buildCardLookup(cards);
-  const deckCards = resolveDeckCards(deckEntries, lookup);
+  const { proxyEntries, skippedProxyCount } = splitProxyEntries(deckEntries);
+  if (!proxyEntries.length) {
+    throw new Error('All deck entries were marked [skipproxy]; nothing to proxy.');
+  }
+  if (skippedProxyCount > 0) {
+    console.log(`Skipping ${skippedProxyCount} card${skippedProxyCount === 1 ? '' : 's'} marked [skipproxy].`);
+  }
+
+  const deckCards = resolveDeckCards(proxyEntries, lookup);
+  const cardIndex = buildCardCodeIndex(cards);
 
   await fs.promises.mkdir(options.cacheDir, { recursive: true });
 
@@ -45,10 +54,39 @@ async function main() {
     gridSize: options.gridSize,
     deckName: options.deckName,
     face: options.face,
+    cardIndex,
   });
 
   await fs.promises.writeFile(options.outputPath, pdfBytes);
   console.log(`Created ${options.outputPath}`);
+}
+
+function splitProxyEntries(entries) {
+  let skippedProxyCount = 0;
+  const proxyEntries = [];
+  for (const entry of entries) {
+    if (shouldSkipProxy(entry)) {
+      skippedProxyCount += Number(entry.count) || 0;
+    } else {
+      proxyEntries.push(entry);
+    }
+  }
+  return { proxyEntries, skippedProxyCount };
+}
+
+function shouldSkipProxy(entry) {
+  if (!entry?.annotations) return false;
+  if (entry.annotations.skipProxy) return true;
+
+  if (Array.isArray(entry.annotations.keywords)) {
+    for (const keyword of entry.annotations.keywords) {
+      if (String(keyword).toLowerCase() === 'skipproxy') {
+        return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 main().catch(err => {

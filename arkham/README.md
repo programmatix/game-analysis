@@ -27,6 +27,9 @@ Tag Arkham-specific utility in square brackets so the sampler CLI can track it:
 - `[weapon]` marks a card as a weapon.
 - `[resources:<n>]` adds that many resources when you see and play the card.
 - `[draw:<n>]` adds that many extra draws.
+- `[permanent]` marks cards that start out and are excluded from deck counts/draw simulations.
+- `[weakness]` (or `[basicweakness]`) marks a weakness; opening hand redraws them and shuffles them back in.
+- `[skipproxy]` keeps the card in the list but omits it from the proxy PDF (no image download).
 
 Example: `2 emergency cache[01088] [resources:3]`
 
@@ -51,6 +54,14 @@ Sample 10,000 opening hands and early draws, counting weapons plus resource/draw
 
 ```bash
 npx arkham-hand-sim --input deck.txt --opening-hand 5 --next-draws 8
+```
+
+### Hand sample (single run)
+
+Use to debug the sampler. Show one literal shuffle with the same annotations as the sampler, listing the exact opening hand and draw order:
+
+```bash
+npx arkham-hand-sample --input deck.txt --opening-hand 5 --next-draws 8
 ```
 
 ### Required sets

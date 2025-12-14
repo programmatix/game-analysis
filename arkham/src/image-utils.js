@@ -3,8 +3,8 @@ const path = require('path');
 const sharp = require('sharp');
 const { sanitizeFileName } = require('../../shared/deck-utils');
 
-async function ensureCardImage(card, cacheDir, defaultFace) {
-  const imageCode = normalizeImageCode(card?.code, defaultFace);
+async function ensureCardImage(card, cacheDir, defaultFace, options = {}) {
+  const imageCode = normalizeImageCode(card?.code, defaultFace, options.face);
   const identifier = sanitizeFileName(card?.name || imageCode);
   const fileName = `${identifier || 'card'}-${imageCode}.png`;
   const filePath = path.join(cacheDir, fileName);
@@ -24,17 +24,29 @@ async function ensureCardImage(card, cacheDir, defaultFace) {
   return filePath;
 }
 
-function normalizeImageCode(code, defaultFace) {
+function normalizeImageCode(code, defaultFace, faceOverride) {
   const trimmed = (code || '').trim();
   if (!trimmed) {
     throw new Error('Card code is missing for an entry.');
   }
   const normalized = trimmed.toLowerCase();
+
+  const preferredFace = normalizeFace(faceOverride) ?? normalizeFace(defaultFace);
   if (/[a-z]$/.test(normalized)) {
+    if (preferredFace) {
+      return `${normalized.slice(0, -1)}${preferredFace}`;
+    }
     return normalized;
   }
-  const face = defaultFace === 'b' ? 'b' : 'a';
+
+  const face = preferredFace || 'a';
   return `${normalized}${face}`;
+}
+
+function normalizeFace(value) {
+  if (typeof value !== 'string') return null;
+  const lower = value.toLowerCase();
+  return lower === 'b' ? 'b' : lower === 'a' ? 'a' : null;
 }
 
 function buildImageUrl(imageCode) {

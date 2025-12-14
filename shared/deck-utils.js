@@ -146,6 +146,12 @@ function parseNameWithCode(text) {
     if (keywordSet.has('weapon')) {
       annotations.weapon = true;
     }
+    if (keywordSet.has('permanent')) {
+      annotations.permanent = true;
+    }
+  }
+  if (keywordSet.has('skipproxy')) {
+    annotations.skipProxy = true;
   }
 
   return { name, code, annotations };
@@ -206,7 +212,18 @@ function resolveIncludePath(target, baseDir) {
 }
 
 function countDeckEntries(entries) {
-  return entries.reduce((total, entry) => total + (Number(entry.count) || 0), 0);
+  return entries.reduce((total, entry) => {
+    const annotations = entry?.annotations;
+    const keywords = Array.isArray(annotations?.keywords) ? annotations.keywords : [];
+    const isPermanent = Boolean(annotations?.permanent)
+      || keywords.some(keyword => String(keyword).toLowerCase() === 'permanent');
+
+    if (isPermanent) {
+      return total;
+    }
+
+    return total + (Number(entry.count) || 0);
+  }, 0);
 }
 
 function stripBracketTokens(text, tokens) {

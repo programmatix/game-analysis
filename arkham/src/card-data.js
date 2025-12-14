@@ -128,8 +128,19 @@ function dedupeByCode(cards) {
   return Array.from(seen.values());
 }
 
+function buildCardCodeIndex(cards) {
+  const map = new Map();
+  for (const card of cards) {
+    if (card && card.code) {
+      map.set(String(card.code).trim(), card);
+    }
+  }
+  return map;
+}
+
 module.exports = {
   buildCardLookup,
+  buildCardCodeIndex,
   loadCardDatabase,
   resolveDeckCards,
 };

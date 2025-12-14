@@ -6,7 +6,8 @@
     "arkham-proxy": "src/cli.js",
     "arkham-odds": "src/odds-cli.js",
     "arkham-sets": "src/sets-cli.js",
-    "arkham-hand-sim": "src/hand-sim-cli.js"
+    "arkham-hand-sim": "src/hand-sim-cli.js",
+    "arkham-hand-sample": "src/hand-sample-cli.js"
   },
   "type": "commonjs",
   "scripts": {
