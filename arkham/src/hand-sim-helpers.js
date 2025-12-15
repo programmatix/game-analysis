@@ -12,6 +12,7 @@ function expandDeck(entries, lookup) {
     }
     const weakness = annotations.weakness || isCardWeakness(card);
     const traits = extractTraits(card?.traits);
+    const slots = extractSlots(card?.slot);
     for (let i = 0; i < entry.count; i += 1) {
       cards.push({
         name: entry.name,
@@ -24,6 +25,7 @@ function expandDeck(entries, lookup) {
         drawPerTurn: annotations.drawPerTurn,
         cost: normalizeCost(card?.cost),
         traits,
+        slots,
       });
     }
   }
@@ -74,6 +76,27 @@ function extractTraits(traitsString) {
     .split('.')
     .map(t => t.trim())
     .filter(t => t.length > 0);
+}
+
+function extractSlots(slotString) {
+  if (!slotString || typeof slotString !== 'string') {
+    return [];
+  }
+
+  return slotString
+    .split('.')
+    .map(part => part.trim())
+    .filter(Boolean)
+    .map(part => {
+      const match = part.match(/^([A-Za-z ]+?)(?:\\s*x(\\d+))?$/i);
+      const name = match ? match[1].trim() : part;
+      const slotsUsed = match && match[2] ? Number(match[2]) : 1;
+      return {
+        name,
+        slots: Number.isFinite(slotsUsed) && slotsUsed > 0 ? slotsUsed : 1,
+        label: part,
+      };
+    });
 }
 
 function isCardWeakness(card) {
@@ -142,4 +165,5 @@ module.exports = {
   drawOpeningHandWithWeaknessRedraw,
   shuffle,
   extractTraits,
+  extractSlots,
 };

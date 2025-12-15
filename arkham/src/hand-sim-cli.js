@@ -75,10 +75,11 @@ async function main() {
 
   const { rows, cardSummaries, byDrawThreshold } = simulateHands(deck, { openingHand, nextDraws, samples, cardsPerTurn });
   const traitAnalysis = analyzeTraits(deck, nonWeakCount);
+  const slotAnalysis = analyzeSlots(deck, nonWeakCount);
   printResults(
     rows,
     { deckSize, openingHand, nextDraws, samples, cardsPerTurn, weaknessCount },
-    { cardSummaries, byDrawThreshold, cardCostSummary, traitAnalysis }
+    { cardSummaries, byDrawThreshold, cardCostSummary, traitAnalysis, slotAnalysis }
   );
 }
 
@@ -288,34 +289,34 @@ function getCardKey(card) {
 
 function analyzeTraits(deck, nonWeakDeckSize) {
   const traitData = new Map();
-  
+
   // Count cards with each trait and track card names with counts
   for (const card of deck) {
     const traits = card.traits || [];
     const cardLabel = card.code ? `${card.name} (${card.code})` : card.name;
     const isWeakness = card.weakness;
-    
+
     for (const trait of traits) {
       let data = traitData.get(trait);
       if (!data) {
-        data = { 
+        data = {
           count: 0, // Count excluding weaknesses
           cardCounts: new Map(), // Map of cardLabel -> count (includes weaknesses)
         };
         traitData.set(trait, data);
       }
-      
+
       // Track all cards (including weaknesses) with their counts
       const currentCount = data.cardCounts.get(cardLabel) || 0;
       data.cardCounts.set(cardLabel, currentCount + 1);
-      
+
       // Only count non-weaknesses for probability calculations
       if (!isWeakness) {
         data.count += 1;
       }
     }
   }
-  
+
   // Calculate hypergeometric probabilities for each trait (excluding weaknesses)
   const traitStats = Array.from(traitData.entries())
     .map(([trait, data]) => {
@@ -323,7 +324,7 @@ function analyzeTraits(deck, nonWeakDeckSize) {
       const cardList = Array.from(data.cardCounts.entries())
         .map(([name, count]) => count > 1 ? `${name} (${count}x)` : name)
         .sort();
-      
+
       return {
         trait,
         count: data.count, // Count excluding weaknesses
@@ -338,8 +339,59 @@ function analyzeTraits(deck, nonWeakDeckSize) {
       if (b.count !== a.count) return b.count - a.count;
       return a.trait.localeCompare(b.trait);
     });
-  
+
   return traitStats;
+}
+
+function analyzeSlots(deck, nonWeakDeckSize) {
+  const slotData = new Map();
+
+  for (const card of deck) {
+    const slots = card.slots || [];
+    if (!slots.length) continue;
+    const cardLabel = card.code ? `${card.name} (${card.code})` : card.name;
+    const isWeakness = card.weakness;
+
+    for (const slot of slots) {
+      const slotName = slot.name || slot.label || 'Unknown';
+      let data = slotData.get(slotName);
+      if (!data) {
+        data = { count: 0, cardCounts: new Map() };
+        slotData.set(slotName, data);
+      }
+
+      const labelSuffix = slot.slots > 1 || (slot.label && slot.label !== slotName) ? ` (${slot.label})` : '';
+      const displayName = `${cardLabel}${labelSuffix}`;
+      const currentCount = data.cardCounts.get(displayName) || 0;
+      data.cardCounts.set(displayName, currentCount + 1);
+
+      if (!isWeakness) {
+        data.count += 1;
+      }
+    }
+  }
+
+  const slotStats = Array.from(slotData.entries())
+    .map(([slot, data]) => {
+      const cardList = Array.from(data.cardCounts.entries())
+        .map(([name, count]) => count > 1 ? `${name} (${count}x)` : name)
+        .sort();
+
+      return {
+        slot,
+        count: data.count,
+        cardNames: cardList,
+        prob5: hypergeometricProbability(nonWeakDeckSize, data.count, 5, 1),
+        prob10: hypergeometricProbability(nonWeakDeckSize, data.count, 10, 1),
+        prob15: hypergeometricProbability(nonWeakDeckSize, data.count, 15, 1),
+      };
+    })
+    .sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count;
+      return a.slot.localeCompare(b.slot);
+    });
+
+  return slotStats;
 }
 
 function hypergeometricProbability(N, K, n, k) {
@@ -421,7 +473,7 @@ function summarizeCardCosts(deck) {
 function printResults(
   rows,
   { deckSize, openingHand, nextDraws, samples, cardsPerTurn, weaknessCount },
-  { cardSummaries, byDrawThreshold, cardCostSummary, traitAnalysis }
+  { cardSummaries, byDrawThreshold, cardCostSummary, traitAnalysis, slotAnalysis }
 ) {
   console.log('Arkham hand sampler (Monte Carlo)');
   console.log(`Deck size: ${deckSize}`);
@@ -486,6 +538,11 @@ function printResults(
     printCardContributions(cardSummaries, byDrawThreshold);
   }
 
+  if (slotAnalysis && slotAnalysis.length) {
+    console.log('');
+    printSlotAnalysis(slotAnalysis);
+  }
+
   if (traitAnalysis && traitAnalysis.length) {
     console.log('');
     printTraitAnalysis(traitAnalysis);
@@ -540,6 +597,29 @@ function printCardCosts(cardCosts) {
 
   cardCosts.forEach(card => {
     console.log(formatRow([card.label, formatNumber(card.cost), card.count, formatNumber(card.cumulativeCost)], widths));
+  });
+}
+
+function printSlotAnalysis(slotAnalysis) {
+  console.log('Slot analysis:');
+  console.log('- Hypergeometric probability of drawing at least one card for each slot type.');
+  console.log('- Probabilities shown for first 5, 10, and 15 cards drawn.');
+  console.log('- Weaknesses are excluded from probability calculations but included in card lists.');
+  console.log('- Sorted by count descending, then by slot name.');
+  console.log('');
+
+  const headers = ['Slot', 'Count', 'Prob in 5', 'Prob in 10', 'Prob in 15'];
+  const widths = [24, 10, 12, 12, 12];
+  console.log(formatRow(headers, widths));
+
+  slotAnalysis.forEach(stat => {
+    console.log(
+      formatRow(
+        [stat.slot, stat.count, formatPercent(stat.prob5), formatPercent(stat.prob10), formatPercent(stat.prob15)],
+        widths
+      )
+    );
+    console.log(`  Cards: ${stat.cardNames.join(', ')}`);
   });
 }
 

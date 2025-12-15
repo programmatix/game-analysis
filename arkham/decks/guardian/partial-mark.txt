@@ -1,0 +1,6 @@
+# Draw is tricky to model for Mark.. Assuming he takes damage every other turn?
+1 mark harrigan [draw:0.5]     [ignorefordecklimit]
+1 sophie[03009] [permanent] [ignorefordecklimit]
+1 the home front [ignorefordecklimit]
+1 shell shock [weakness] [ignorefordecklimit]
+1 random basic weakness [basicweakness] [skipproxy] [ignorefordecklimit]

@@ -1,0 +1,46 @@
+// Upgrade path for Daisy (seeker). Keep this separate so proxy runs only pull the base 30-card list.
+
+## Protection
+2 forewarned # 1XP
+
+## Fighting
+2 "I've got a plan!"[60225] # 2XP
+// Great upgrade for mind over matter.
+2 mind over matter[60226] # 2XP
+
+## Help seeking
+2 arcane insight # 2x3XP
+2 arcane glyphs # 2x3XP
+2 death XIII # 2x1XP
+2 deduction[02150] # 2x2XP
+2 working a hunch[11045] # 2x2XP
+2 confound # 2x3XP
+2 deciphered reality # 2x5XP
+2 extensive research[06198] # 2x1XP
+2 seeking answers[60227] # 2XP
+
+## Draw
+2 Feed the mind # 2x3XP
+2 perception[60228] # 2x2XP
+2 cryptic research # 2x4XP
+2 Old Book of Lore[06279] # 2x3XP
+2 glimpse the unthinkable[60221] # 1XP
+2 glimpse the unthinkable[05318] # 1XP
+
+## Tutoring
+2 no stone unturned[03307] # 5XP
+
+## Evasion
+2 survey the area # 2x1XP
+
+## Resources
+2 cryptic writings[60224] # 2x2XP
+
+## Support
+2 guidance[09053] # 1XP
+
+## Other
+# 2 Medical texts[08038] # 2x2XP
+1 higher education[02187] [permanent] # 2x3XP
+1 miskatonic archaeology funding [permanent] # 4XP
+1 studious [permanent] # 3XP
