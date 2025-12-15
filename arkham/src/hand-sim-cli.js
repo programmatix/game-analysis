@@ -74,7 +74,7 @@ async function main() {
   }
 
   const { rows, cardSummaries, byDrawThreshold } = simulateHands(deck, { openingHand, nextDraws, samples, cardsPerTurn });
-  const traitAnalysis = analyzeTraits(deck, deckSize);
+  const traitAnalysis = analyzeTraits(deck, nonWeakCount);
   printResults(
     rows,
     { deckSize, openingHand, nextDraws, samples, cardsPerTurn, weaknessCount },
@@ -286,34 +286,53 @@ function getCardKey(card) {
   return card.code || card.name;
 }
 
-function analyzeTraits(deck, deckSize) {
+function analyzeTraits(deck, nonWeakDeckSize) {
   const traitData = new Map();
   
-  // Count cards with each trait and track card names
+  // Count cards with each trait and track card names with counts
   for (const card of deck) {
     const traits = card.traits || [];
     const cardLabel = card.code ? `${card.name} (${card.code})` : card.name;
+    const isWeakness = card.weakness;
+    
     for (const trait of traits) {
       let data = traitData.get(trait);
       if (!data) {
-        data = { count: 0, cardNames: new Set() };
+        data = { 
+          count: 0, // Count excluding weaknesses
+          cardCounts: new Map(), // Map of cardLabel -> count (includes weaknesses)
+        };
         traitData.set(trait, data);
       }
-      data.count += 1;
-      data.cardNames.add(cardLabel);
+      
+      // Track all cards (including weaknesses) with their counts
+      const currentCount = data.cardCounts.get(cardLabel) || 0;
+      data.cardCounts.set(cardLabel, currentCount + 1);
+      
+      // Only count non-weaknesses for probability calculations
+      if (!isWeakness) {
+        data.count += 1;
+      }
     }
   }
   
-  // Calculate hypergeometric probabilities for each trait
+  // Calculate hypergeometric probabilities for each trait (excluding weaknesses)
   const traitStats = Array.from(traitData.entries())
-    .map(([trait, data]) => ({
-      trait,
-      count: data.count,
-      cardNames: Array.from(data.cardNames).sort(),
-      prob5: hypergeometricProbability(deckSize, data.count, 5, 1),
-      prob10: hypergeometricProbability(deckSize, data.count, 10, 1),
-      prob15: hypergeometricProbability(deckSize, data.count, 15, 1),
-    }))
+    .map(([trait, data]) => {
+      // Build card list with counts, sorted by name
+      const cardList = Array.from(data.cardCounts.entries())
+        .map(([name, count]) => count > 1 ? `${name} (${count}x)` : name)
+        .sort();
+      
+      return {
+        trait,
+        count: data.count, // Count excluding weaknesses
+        cardNames: cardList,
+        prob5: hypergeometricProbability(nonWeakDeckSize, data.count, 5, 1),
+        prob10: hypergeometricProbability(nonWeakDeckSize, data.count, 10, 1),
+        prob15: hypergeometricProbability(nonWeakDeckSize, data.count, 15, 1),
+      };
+    })
     .sort((a, b) => {
       // Sort by count descending, then by trait name
       if (b.count !== a.count) return b.count - a.count;
@@ -528,6 +547,7 @@ function printTraitAnalysis(traitAnalysis) {
   console.log('Trait analysis:');
   console.log('- Hypergeometric probability of drawing at least one card with each trait.');
   console.log('- Probabilities shown for first 5, 10, and 15 cards drawn.');
+  console.log('- Weaknesses are excluded from probability calculations but included in card lists.');
   console.log('- Sorted by count descending, then by trait name.');
   console.log('');
 
