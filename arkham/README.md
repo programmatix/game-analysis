@@ -44,6 +44,14 @@ Example: `2 emergency cache[01088] [resources:3]`
 npx arkham-proxy --input deck.txt --name "Roland Solo"
 ```
 
+### Deck annotator
+
+Add inline comments with XP, cost, type, traits, slot, and text for each card:
+
+```bash
+npx arkham-annotate --input deck.txt --output deck-with-notes.txt
+```
+
 ### Odds helper
 
 Compute draw odds that respect Arkham opening-hand weakness redraws:

@@ -116,33 +116,41 @@ function resolveDeckCards(entries, lookup, options = {}) {
   assertNoAmbiguousCards(entries, lookup);
   const cards = [];
   for (const entry of entries) {
-    if (entry.code) {
-      const codeKey = normalizeName(entry.code);
-      const codeMatches = lookup.get(codeKey);
-      if (!codeMatches || !codeMatches.length) {
-        throw new Error(`Card code "${entry.code}" was not found in arkhamdb-json-data.`);
-      }
-      const card = dedupeByCode(codeMatches)[0] || codeMatches[0];
-      for (let i = 0; i < entry.count; i++) {
-        cards.push(attachEntry ? { card, entry } : card);
-      }
-      continue;
-    }
-
-    const key = normalizeName(entry.name);
-    const matches = lookup.get(key);
-    if (!matches || !matches.length) {
-      throw new Error(`Card "${entry.name}" was not found in arkhamdb-json-data.`);
-    }
-
-    const unique = dedupeByCode(matches);
-    const candidates = unique.length ? unique : matches;
-    const card = candidates[0];
+    const card = resolveCard(entry, lookup);
     for (let i = 0; i < entry.count; i++) {
       cards.push(attachEntry ? { card, entry } : card);
     }
   }
   return cards;
+}
+
+function resolveCard(entry, lookup) {
+  if (!entry) {
+    throw new Error('Cannot resolve an empty deck entry.');
+  }
+
+  if (entry.code) {
+    const codeKey = normalizeName(entry.code);
+    const codeMatches = lookup.get(codeKey);
+    if (!codeMatches || !codeMatches.length) {
+      throw new Error(`Card code "${entry.code}" was not found in arkhamdb-json-data.`);
+    }
+    return dedupeByCode(codeMatches)[0] || codeMatches[0];
+  }
+
+  const key = normalizeName(entry.name);
+  const matches = lookup.get(key);
+  if (!matches || !matches.length) {
+    throw new Error(`Card "${entry.name}" was not found in arkhamdb-json-data.`);
+  }
+
+  const unique = dedupeByCode(matches);
+  const candidates = unique.length ? unique : matches;
+  if (candidates.length > 1) {
+    const details = describeAmbiguousCandidates(candidates);
+    throw new Error(`Card "${entry.name}" is ambiguous. Candidates:\n${details}`);
+  }
+  return candidates[0];
 }
 
 function dedupeByCode(cards) {
@@ -172,5 +180,6 @@ module.exports = {
   assertNoAmbiguousCards,
   findAmbiguousEntries,
   loadCardDatabase,
+  resolveCard,
   resolveDeckCards,
 };

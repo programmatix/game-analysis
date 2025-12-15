@@ -287,8 +287,10 @@ function parseModifier(value) {
 module.exports = {
   readDeckText,
   parseDeckList,
+  parseNameWithCode,
   normalizeName,
   sanitizeFileName,
   resolveNameAndOutput,
   countDeckEntries,
+  stripLineComment,
 };
