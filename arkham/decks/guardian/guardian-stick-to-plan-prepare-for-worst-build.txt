@@ -10,37 +10,54 @@ Took this with Mark and Daisy through Drowned City Dec '25.
 
 ## Weapons
 2 machete [weapon]
+//? 0 XP. 3 cost. Asset. Item, Weapon, Melee. Hand slot. [action]: Fight. You get +1 [combat] for this attack. If the attacked enemy is the only enemy engaged with you, this attack deals +1 damage.
 2 .32 colt[03020] [weapon]
+//? 0 XP. 3 cost. Asset. Item, Weapon, Firearm. Hand slot. Uses (6 ammo). [action] Spend 1 ammo: Fight. You deal +1 damage for this attack.
 2 crowbar [weapon]
+//? 0 XP. 3 cost. Asset. Item, Weapon, Tool, Melee. Hand slot. [action] Exhaust Crowbar: Investigate. This investigation attempt uses [combat] instead of [intellect]. [action] Exhaust Crowbar: Fight. You get +2 [combat] for this attack.
 2 remington model 1858[11022] [weapon]
+//? 0 XP. 3 cost. Asset. Item, Weapon, Firearm. Hand slot. Uses (2 ammo). [action] Spend 1 ammo: Fight. You get +1 [combat] for this attack. This attack deals +1 damage. [reaction] When Remington Model 1858 leaves play: Immediately trigger the above [action] ability, ignoring all costs.
 
 ## Damage
 2 vicious blow[01025]
+//? 0 XP. 0 cost. Skill. Practiced. If this skill test is successful during an attack, that attack deals +1 damage.
 
 ## Resources
 2 emergency cache[01088] [resources:3]
+//? 0 XP. 0 cost. Event. Supply. Gain 3 resources.
 2 stand together[60118] [resources:2]
+//? 0 XP. 0 cost. Event. Spirit. Choose another investigator at your location. Both you and that investigator gain 2 resources.
 
 ## Draw
 2 glory [draw:2]
+//? 0 XP. 1 cost. Event. Spirit. Fast. Play after you defeat an enemy. Draw 2 cards.
 
 ## Draw + heal
 2 ready for anything
+//? 0 XP. 1 cost. Event. Spirit, Bold. Play only as your first action. Draw 1 card (2 cards instead if you drew an enemy this round). Then, heal 1 horror. This action does not provoke attacks of opportunity.
 2 second wind[04149]
+//? 0 XP. 1 cost. Event. Spirit, Bold. Play only as your first action. Heal 1 damage (2 instead if you drew a treachery this round). Then, draw 1 card.
 
 ## Allies
 2 beat cop[01018]
+//? 0 XP. 4 cost. Asset. Ally, Police. Ally slot. You get +1 [combat]. [free] Discard Beat Cop: Deal 1 damage to an enemy at your location.
 
 ## Skill tests
 1 desperate search[03117]
+//? 0 XP. 0 cost. Skill. Desperate. Max 1 committed per skill test. Commit to a skill test only if you have 3 or fewer remaining sanity.
 1 say your prayers
+//? 0 XP. 0 cost. Skill. Desperate. Max 1 committed per skill test. Commit to a skill test only if you have 3 or fewer remaining sanity.
 2 take the initiative
+//? 0 XP. 0 cost. Skill. Practiced, Bold. Commit only to a skill test you are performing.Take the Initiative loses [wild] for each action that has been completed by any investigator this phase.
 2 unexpected courage[01093]
+//? 0 XP. 0 cost. Skill. Innate. Max 1 committed per skill test.
 
 ## Misc
 # Both these kind of useless initially, but need them for the build.
 1 Prepared for the Worst[02184]
+//? 0 XP. 1 cost. Event. Tactic. Search the top 9 cards of your deck for a [[Weapon]] asset and add it to your hand. Shuffle your deck.
 1 Primed for Action
+//? 0 XP. 0 cost. Event. Tactic, Bold. Play only as your first action. Play a [[Firearm]] asset from your hand, reducing its cost by 2. Then, you may play an [[Upgrade]] event from your hand, attaching it to that asset if able.
 
 # Upgrades
 
@@ -49,3 +66,4 @@ Took this with Mark and Daisy through Drowned City Dec '25.
 #2 well-maintained # 2x1 XP
 #2 extra ammunition [resources:4]  # 2x3 XP.  Resources are tricky to model as it's a drip feed as I use the weapon.
 #2 .45 thompson[05186] [weapon] # 3 XP 
+

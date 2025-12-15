@@ -8,25 +8,39 @@ Took this Daisy deck with Mark as guardian through Drowned City Dec '25.
 
 ## Seeking
 2 magnifying glass[01030]
+//? 0 XP. 1 cost. Asset. Item. Tool. Hand slot. Fast. You get +1 [intellect] while investigating.
 2 dr. milan christopher [resourcesperturn:1] # Hard to model the resources here as situational, plus it drip feeds.
+//? 0 XP. 4 cost. Asset. Ally. Miskatonic. Ally slot. You get +1 [intellect]. [reaction] After you successfully investigate: Gain 1 resource.
 2 vantage point
+//? 0 XP. 1 cost. Event. Insight. Fast. Play after a location enters play or is revealed during an investigator's turn. Until the end of the active investigator's turn, that location gets -1 shroud. You may move 1 clue to that location from any other location.
 2 deduction[01039]
+//? 0 XP. 0 cost. Skill. Practiced. If this skill test is successful while investigating a location, discover 1 additional clue at that location.
 
 ## Off-guardianing
 2 mind over matter[01036]
+//? 0 XP. 1 cost. Event. Insight. Fast. Play only during your turn. Until the end of the round, you may use your [intellect] in place of your [combat] and [agility].
 
 ## Support
 // Oops, messed up here, way too many hand slots.. Need to ditch next 3 pairs really..
 2 chemistry set [resources:2] [draw:1] # V hard to model this one
+//? 0 XP. 2 cost. Asset. Item. Tool. Science. Accessory slot. [action] Exhaust Chemistry Set: Investigate. If you... - ...fail by exactly 2, discard Chemistry Set. - ...succeed by exactly 0, gain 2 resources. - ...succeed by exactly 2, draw 1 card. - ...succeed by exactly 4, discover 1 additional clue at your location.
 2 alchemical distillation [draw:3] [resources:3] # V hard to model this one, and it can help others
+//? 0 XP. 2 cost. Asset. Item. Science. Hand slot. Customizable. Uses (3 supplies). [action] Spend 1 supply: Choose an investigator at your location and test [intellect] (1). If you succeed, that investigator performs one of the following options - - Draw 2 cards. - Gain 2 resources.
 2 medical texts[01035]
+//? 0 XP. 2 cost. Asset. Item. Tome. Hand slot. [action] Choose an investigator at your location and test [intellect] (2). If you succeed, heal 1 damage from that investigator. If you fail, deal 1 damage to that investigator.
 2 logical reasoning[03191]
+//? 0 XP. 2 cost. Event. Insight. Play only if you have at least 1 clue. Choose an investigator at your location. That investigator either heals 2 horror or discards a [[Terror]] card from his or her threat area.
 
 ## Resources
 2 emergency cache[01088] [resources:3]
+//? 0 XP. 0 cost. Event. Supply. Gain 3 resources.
 2 burning the midnight oil [resources:2]
+//? 0 XP. 0 cost. Event. Insight. Investigate. When this action begins, gain 2 resources.
 2 crack the case [resources:3] # Hard to model the resources here as situational
+//? 0 XP. 0 cost. Event. Insight. Fast. Play after an investigator discovers the last remaining clue at your location. Investigators at that location gain a total of X resources, distributed as you wish. X is that location's shroud value.
 
 ## Skill tests
 2 unexpected courage[01093]
+//? 0 XP. 0 cost. Skill. Innate. Max 1 committed per skill test.
 # Upgrades are tracked separately in `decks/seeker/seeker-upgrades.txt`.
+

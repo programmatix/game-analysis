@@ -7,6 +7,8 @@ const { loadCardDatabase, buildCardLookup, assertNoAmbiguousCards, resolveCard }
 
 const DEFAULT_DATA_DIR = path.join(__dirname, '..', 'arkhamdb-json-data');
 
+const ANNOTATION_PREFIX = '//? ';
+
 async function main() {
   const program = new Command();
   program
@@ -49,7 +51,8 @@ function annotateDeckText(deckText, lookup) {
   let inBlockComment = false;
   const hasTrailingNewline = deckText.endsWith('\n');
 
-  lines.forEach((line, index) => {
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
     const { text, nextInBlock } = stripBlockCommentsFromLine(line, inBlockComment);
     inBlockComment = nextInBlock;
 
@@ -62,9 +65,16 @@ function annotateDeckText(deckText, lookup) {
         try {
           const card = resolveCard(entry, lookup);
           const comment = buildCardComment(card);
+          const annotationLine = `${indent}${ANNOTATION_PREFIX}${comment}`;
           output.push(line);
-          output.push(`${indent}// ${comment}`);
-          return;
+
+          const nextLine = lines[index + 1];
+          if (nextLine && isAnnotationLine(nextLine)) {
+            index += 1; // Replace existing annotation with the new one.
+          }
+
+          output.push(annotationLine);
+          continue;
         } catch (err) {
           const prefix = `Line ${index + 1}: ${line.trim()}`;
           throw new Error(`${prefix}\n${err instanceof Error ? err.message : String(err)}`);
@@ -73,7 +83,7 @@ function annotateDeckText(deckText, lookup) {
     }
 
     output.push(line);
-  });
+  }
 
   const joined = output.join('\n');
   return hasTrailingNewline ? `${joined}\n` : joined;
@@ -182,9 +192,14 @@ function formatType(card) {
 
 function formatTraits(card) {
   if (!card?.traits) return '';
-  const traits = card.traits.replace(/\s+/g, ' ').trim();
-  if (!traits) return '';
-  return traits.replace(/[.;,]+$/g, '');
+  const normalized = card.traits.replace(/\s+/g, ' ').trim().replace(/[.;,]+$/g, '');
+  if (!normalized) return '';
+  const parts = normalized
+    .split(/[.;]/)
+    .map(part => part.trim())
+    .filter(Boolean);
+  if (!parts.length) return '';
+  return parts.join(', ');
 }
 
 function formatSlot(card) {
@@ -198,6 +213,10 @@ function formatRulesText(card) {
   if (!raw.trim()) return '';
   const withoutTags = raw.replace(/<\/?[^>]+>/g, '');
   return withoutTags.replace(/\s+/g, ' ').trim();
+}
+
+function isAnnotationLine(line) {
+  return /^\s*\/\/\?\s/.test(line);
 }
 
 main().catch(err => {

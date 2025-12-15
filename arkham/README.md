@@ -46,7 +46,7 @@ npx arkham-proxy --input deck.txt --name "Roland Solo"
 
 ### Deck annotator
 
-Add inline comments with XP, cost, type, traits, slot, and text for each card:
+Add inline comments (prefixed with `//?`) with XP, cost, type, traits, slot, and text for each card. Re-running replaces any previous `//?` annotations:
 
 ```bash
 npx arkham-annotate --input deck.txt --output deck-with-notes.txt
