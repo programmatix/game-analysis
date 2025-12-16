@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 const path = require('path');
 const { program } = require('commander');
-const { readDeckText, parseDeckList } = require('../../shared/deck-utils');
+const { readDeckText, parseDeckList, hasCardEntries } = require('../../shared/deck-utils');
 const { loadCardDatabase, buildCardLookup } = require('./card-data');
 const { expandDeck, drawOpeningHandWithWeaknessRedraw, shuffle } = require('./hand-sim-helpers');
 const { printColumnLegend } = require('./hand-column-legend');
@@ -51,7 +51,7 @@ async function main() {
 
   const deckBaseDir = opts.input ? path.dirname(path.resolve(opts.input)) : process.cwd();
   const entries = parseDeckList(deckText, { baseDir: deckBaseDir });
-  if (!entries.length) {
+  if (!hasCardEntries(entries)) {
     throw new Error('No valid deck entries were found.');
   }
 

@@ -85,6 +85,7 @@ function describeAmbiguousCandidates(candidates) {
 function findAmbiguousEntries(entries, lookup) {
   const ambiguous = [];
   for (const entry of entries) {
+    if (!entry || entry.proxyPageBreak) continue;
     if (entry.code) continue;
 
     const key = normalizeName(entry.name);
@@ -113,9 +114,18 @@ function assertNoAmbiguousCards(entries, lookup) {
 
 function resolveDeckCards(entries, lookup, options = {}) {
   const attachEntry = Boolean(options.attachEntry);
-  assertNoAmbiguousCards(entries, lookup);
+  const preservePageBreaks = Boolean(options.preservePageBreaks);
+  const cardEntries = Array.isArray(entries) ? entries.filter(entry => entry && !entry.proxyPageBreak) : [];
+  assertNoAmbiguousCards(cardEntries, lookup);
   const cards = [];
   for (const entry of entries) {
+    if (entry?.proxyPageBreak) {
+      if (preservePageBreaks) {
+        cards.push({ proxyPageBreak: true });
+      }
+      continue;
+    }
+
     const card = resolveCard(entry, lookup);
     for (let i = 0; i < entry.count; i++) {
       cards.push(attachEntry ? { card, entry } : card);

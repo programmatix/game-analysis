@@ -8,7 +8,8 @@
     "arkham-sets": "src/sets-cli.js",
     "arkham-hand-sim": "src/hand-sim-cli.js",
     "arkham-hand-sample": "src/hand-sample-cli.js",
-    "arkham-annotate": "src/annotate-cli.js"
+    "arkham-annotate": "src/annotate-cli.js",
+    "arkham-search": "src/search-cli.js"
   },
   "type": "commonjs",
   "scripts": {

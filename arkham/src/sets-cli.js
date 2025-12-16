@@ -2,7 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 const { Command } = require('commander');
-const { readDeckText, parseDeckList } = require('../../shared/deck-utils');
+const { readDeckText, parseDeckList, hasCardEntries } = require('../../shared/deck-utils');
 const { loadCardDatabase, buildCardLookup, resolveDeckCards } = require('./card-data');
 
 const DEFAULT_DATA_DIR = path.join(__dirname, '..', 'arkhamdb-json-data');
@@ -25,7 +25,7 @@ async function main() {
   const dataDir = path.resolve(options.dataDir);
   const deckBaseDir = options.input ? path.dirname(path.resolve(options.input)) : process.cwd();
   const deckEntries = parseDeckList(deckText, { baseDir: deckBaseDir });
-  if (!deckEntries.length) {
+  if (!hasCardEntries(deckEntries)) {
     throw new Error('No valid deck entries were found.');
   }
 

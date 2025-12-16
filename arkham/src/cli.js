@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 const fs = require('fs');
 const path = require('path');
-const { readDeckText, parseDeckList, countDeckEntries } = require('../../shared/deck-utils');
+const { readDeckText, parseDeckList, countDeckEntries, hasCardEntries } = require('../../shared/deck-utils');
 const { parseCliOptions } = require('./options');
 const { loadCardDatabase, buildCardLookup, buildCardCodeIndex, resolveDeckCards } = require('./card-data');
 const { buildPdf } = require('./pdf-builder');
@@ -15,7 +15,7 @@ async function main() {
 
   const deckBaseDir = options.input ? path.dirname(path.resolve(options.input)) : process.cwd();
   const deckEntries = parseDeckList(deckText, { baseDir: deckBaseDir });
-  if (!deckEntries.length) {
+  if (!hasCardEntries(deckEntries)) {
     throw new Error('No valid deck entries were found.');
   }
 
@@ -40,11 +40,18 @@ async function main() {
     console.log(`Skipping ${skippedProxyCount} card${skippedProxyCount === 1 ? '' : 's'} marked [skipproxy].`);
   }
 
-  const deckCards = resolveDeckCards(proxyEntries, lookup, { attachEntry: true });
-  const proxyCards = deckCards.map(({ card, entry }) => ({
-    card,
-    skipBack: shouldSkipBack(entry),
-  }));
+  const deckCards = resolveDeckCards(proxyEntries, lookup, { attachEntry: true, preservePageBreaks: true });
+  const proxyCards = deckCards.map(item => {
+    if (item?.proxyPageBreak) {
+      return { proxyPageBreak: true };
+    }
+
+    const { card, entry } = item;
+    return {
+      card,
+      skipBack: shouldSkipBack(entry),
+    };
+  });
   const cardIndex = buildCardCodeIndex(cards);
 
   await fs.promises.mkdir(options.cacheDir, { recursive: true });

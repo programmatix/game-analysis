@@ -76,6 +76,26 @@ Use to debug the sampler. Show one literal shuffle with the same annotations as 
 npx arkham-hand-sample --input deck.txt --opening-hand 5 --next-draws 8
 ```
 
+### Card search
+
+Search through the bundled card database by faction, XP, cost, traits, text, and more:
+
+```bash
+# Guardians weapons up to level 2 that mention engage
+npx arkham-search --faction guardian --xp 0-2 --trait Weapon --text engage --type asset
+
+# Cheap Rogue tricks
+npx arkham-search --class rogue --cost 0-2 --type event --show-text
+```
+
+Useful flags:
+
+- `--faction/--class` guardian|seeker|rogue|mystic|survivor|neutral
+- `--xp` and `--cost` accept ranges like `0-2` or single values
+- `--trait`, `--slot`, `--type`, `--pack`, `--name`, `--text` filter on other card fields
+- `--unique` restricts to unique cards; `--exclude-weaknesses` removes weaknesses
+- `--sort` controls ordering (comma-separated fields), `--limit` caps how many lines print
+
 ### Required sets
 
 List every pack or box needed for a deck using the full names from arkhamdb:

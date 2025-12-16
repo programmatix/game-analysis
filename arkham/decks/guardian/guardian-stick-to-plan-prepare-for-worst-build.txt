@@ -61,9 +61,17 @@ Took this with Mark and Daisy through Drowned City Dec '25.
 
 # Upgrades
 
-#1 Stick to the Plan [permanent] # 3 XP
-#2 reliable # 2x1 XP
-#2 well-maintained # 2x1 XP
-#2 extra ammunition [resources:4]  # 2x3 XP.  Resources are tricky to model as it's a drip feed as I use the weapon.
-#2 .45 thompson[05186] [weapon] # 3 XP 
+1 Stick to the Plan [permanent] # 3 XP
+//? 3 XP. 0 cost. Asset. Talent. Permanent. Exceptional. [reaction] Before you draw your opening hand: Search your deck for up to 3 different [[Tactic]] and/or [[Supply]] events, and attach them facedown to Stick to the Plan. Shuffle your deck. Cards attached to Stick to the Plan may be played as if they were in your hand. As an additional cost to play an attached card, exhaust Stick to the Plan.
+1 .45 thompson[05186] [weapon] # 3 XP 
+//? 3 XP. 6 cost. Asset. Item, Weapon, Firearm, Illicit. Hand x2 slot. Uses (5 ammo). Ammo spent from .45 Thompson is placed in your resource pool, as resources. [action] Spend 1 ammo: Fight. You get +2 [combat] and deal +1 damage for this attack.
+1 .45 thompson[05186] [weapon] # 3 XP 
+//? 3 XP. 6 cost. Asset. Item, Weapon, Firearm, Illicit. Hand x2 slot. Uses (5 ammo). Ammo spent from .45 Thompson is placed in your resource pool, as resources. [action] Spend 1 ammo: Fight. You get +2 [combat] and deal +1 damage for this attack.
+2 reliable # 2x1 XP
+//? 1 XP. 1 cost. Event. Upgrade. Fast. Play only during your turn. Attach to an [[Item]] asset you control. While resolving a triggered ability on attached asset, you get +1 to each of your skills.
+2 well-maintained # 2x1 XP
+//? 1 XP. 0 cost. Event. Upgrade. Fast. Play only during your turn. Attach to an [[Item]] asset you control. Limit 1 per asset. [reaction] After attached asset is discarded: Return it to its owner's hand, along with each other [[Upgrade]] attachment that was attached to it.
+2 extra ammunition [resources:2]  # 2x3 XP.  Resources are tricky to model as it's a drip feed as I use specifically the Thompson.
+//? 1 XP. 2 cost. Event. Supply. Place 3 ammo tokens on a [[Firearm]] asset controlled by an investigator at your location.
+
 

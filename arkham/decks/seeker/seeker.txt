@@ -1,5 +1,6 @@
 /*
 Took this Daisy deck with Mark as guardian through Drowned City Dec '25.
+Don't feel I can rely on Daisy's item coming up, to be able to go really tome heavy.
 */
 
 
@@ -42,5 +43,33 @@ Took this Daisy deck with Mark as guardian through Drowned City Dec '25.
 ## Skill tests
 2 unexpected courage[01093]
 //? 0 XP. 0 cost. Skill. Innate. Max 1 committed per skill test.
-# Upgrades are tracked separately in `decks/seeker/seeker-upgrades.txt`.
 
+
+[proxypagebreak]
+
+# Upgrade (generic path)
+
+## First priority is to fix the 'too many hand slot items' issue.  So cheap events/skills to replace some of those 6 cards.
+
+2 Death • XIII # 2x1XP
+//? 1 XP. 3 cost. Asset. Tarot. Tarot slot. You get +1 [intellect]. [reaction] When the game begins, if Death • XIII is in your opening hand: Put it into play.
+
+//2 survey the area # 2x1XP
+//? 1 XP. 0 cost. Skill. Practiced, Expert. While Survey the Area is in your hand or committed to a skill test, it gains [intellect] icons equal to your [agility], and [agility] icons equal to your [intellect].
+
+2 guidance[09053] # 1XP
+//? 1 XP. 0 cost. Event. Insight. Choose another investigator at your location who has yet to take their turn this round. During their turn this round, the chosen investigator gets +1 to each of their skills, and may take an additional action. Playing Guidance does not provoke attacks of opportunity.
+
+## Then just good cards?  No particular build in mind.  Not going tomes on this one.
+
+2 working a hunch[11045] # 2x2XP
+//? 2 XP. 2 cost. Event. Insight. Fast. Play only during your turn. Discover 1 clue from any revealed location.
+
+2 confound # 2x3XP
+//? 3 XP. 2 cost. Event. Insight, Trick. Parley. Choose an enemy at your location. Test [intellect] (X), where X is the chosen enemy's evade value. If you succeed, discover 2 clues at your location. Then, if the chosen enemy is non-[[Elite]], automatically evade it. It does not ready during the next upkeep phase.
+
+2 seeking answers[60227] # 2XP
+//? 2 XP. 1 cost. Event. Insight. Investigate. If you succeed, instead of discovering a clue at your location, discover 2 total clues from among your location and connecting locations.
+
+1 studious [permanent] # 3XP
+//? 3 XP. 0 cost. Asset. Talent. Permanent. You begin each game with 1 additional card in your opening hand.

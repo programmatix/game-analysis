@@ -32,6 +32,11 @@ function parseDeckList(text, options = {}) {
       continue;
     }
 
+    if (/^\[proxypagebreak\]$/i.test(trimmed)) {
+      entries.push({ proxyPageBreak: true });
+      continue;
+    }
+
     const includeMatch = /^\[include:([^\]]+)\]$/i.exec(trimmed);
     if (includeMatch) {
       const includeTarget = includeMatch[1].trim();
@@ -232,6 +237,10 @@ function resolveIncludePath(target, baseDir) {
 
 function countDeckEntries(entries) {
   return entries.reduce((total, entry) => {
+    if (entry?.proxyPageBreak) {
+      return total;
+    }
+
     const annotations = entry?.annotations;
     const keywords = Array.isArray(annotations?.keywords) ? annotations.keywords : [];
     const isPermanent = Boolean(annotations?.permanent)
@@ -284,6 +293,11 @@ function parseModifier(value) {
   return { type: normalizedKey, value: parsedNumber };
 }
 
+function hasCardEntries(entries) {
+  if (!Array.isArray(entries)) return false;
+  return entries.some(entry => entry && !entry.proxyPageBreak);
+}
+
 module.exports = {
   readDeckText,
   parseDeckList,
@@ -293,4 +307,5 @@ module.exports = {
   resolveNameAndOutput,
   countDeckEntries,
   stripLineComment,
+  hasCardEntries,
 };

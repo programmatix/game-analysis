@@ -15,7 +15,7 @@ const {
   drawRulers,
   drawPageLabel,
 } = require('../../shared/pdf-layout');
-const { readDeckText, parseDeckList, normalizeName, sanitizeFileName, resolveNameAndOutput } = require('../../shared/deck-utils');
+const { readDeckText, parseDeckList, normalizeName, sanitizeFileName, resolveNameAndOutput, hasCardEntries } = require('../../shared/deck-utils');
 const DEFAULT_CACHE_DIR = path.join('.cache', 'card-art');
 const ASSET_CACHE_DIR = path.join('.cache', 'assets');
 const ARTWORK_CROP = { x: 0.07, y: 0.0, width: 0.86, height: 0.50 };
@@ -55,7 +55,7 @@ async function main() {
 
   const deckBaseDir = options.input ? path.dirname(path.resolve(options.input)) : process.cwd();
   const deckEntries = parseDeckList(deckText, { baseDir: deckBaseDir });
-  if (!deckEntries.length) {
+  if (!hasCardEntries(deckEntries)) {
     throw new Error('No valid deck entries were found.');
   }
 
@@ -171,6 +171,10 @@ async function loadCardDatabase(allCardsPath) {
 function resolveDeckCards(entries, lookup) {
   const cards = [];
   for (const entry of entries) {
+    if (!entry || entry.proxyPageBreak) {
+      continue;
+    }
+
     const key = normalizeName(entry.name);
     const card = lookup.get(key);
     if (!card) {

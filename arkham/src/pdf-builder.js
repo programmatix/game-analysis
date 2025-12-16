@@ -34,7 +34,8 @@ async function buildPdf({
   const cardsPerPage = gridSize * gridSize;
   const gapPt = mmToPt(GAP_BETWEEN_CARDS_MM);
   const imageCache = new Map();
-  const cardEntries = cards.map(card => resolveCardFaces(normalizeDeckCard(card), face, cardIndex));
+  const paddedCards = applyProxyPageBreaks(cards, cardsPerPage);
+  const cardEntries = paddedCards.map(card => resolveCardFaces(normalizeDeckCard(card), face, cardIndex));
   const pagePlan = buildPagePlan(cardEntries, cardsPerPage);
   const totalPages = pagePlan.length || 1;
   const layout = computeGridLayout({
@@ -189,6 +190,34 @@ function buildPagePlan(cardEntries, cardsPerPage) {
   }
 
   return pages.length ? pages : [{ slots: fillSlots([], cardsPerPage, entry => entry), isBack: false }];
+}
+
+function applyProxyPageBreaks(cards, cardsPerPage) {
+  if (!Array.isArray(cards) || !Number.isFinite(cardsPerPage) || cardsPerPage <= 0) {
+    return Array.isArray(cards) ? cards : [];
+  }
+
+  const output = [];
+  let slotsFilled = 0;
+
+  for (const card of cards) {
+    if (card && card.proxyPageBreak) {
+      const remainder = slotsFilled % cardsPerPage;
+      if (remainder !== 0) {
+        const padding = cardsPerPage - remainder;
+        for (let i = 0; i < padding; i += 1) {
+          output.push(null);
+          slotsFilled += 1;
+        }
+      }
+      continue;
+    }
+
+    output.push(card);
+    slotsFilled += 1;
+  }
+
+  return output;
 }
 
 function fillSlots(entries, size, mapFn) {

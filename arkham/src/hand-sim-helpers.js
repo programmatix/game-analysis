@@ -2,9 +2,10 @@ const { normalizeName } = require('../../shared/deck-utils');
 const { assertNoAmbiguousCards } = require('./card-data');
 
 function expandDeck(entries, lookup) {
-  assertNoAmbiguousCards(entries, lookup);
+  const cardEntries = Array.isArray(entries) ? entries.filter(entry => entry && !entry.proxyPageBreak) : [];
+  assertNoAmbiguousCards(cardEntries, lookup);
   const cards = [];
-  for (const entry of entries) {
+  for (const entry of cardEntries) {
     const card = resolveDeckCard(entry, lookup);
     const annotations = normalizeAnnotations(entry.annotations);
     if (annotations.permanent) {
