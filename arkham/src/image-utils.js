@@ -4,8 +4,16 @@ const sharp = require('sharp');
 const { sanitizeFileName } = require('../../shared/deck-utils');
 
 async function ensureCardImage(card, cacheDir, defaultFace, options = {}) {
-  const imageCode = normalizeImageCode(card?.code, defaultFace, options.face);
-  const identifier = sanitizeFileName(card?.name || imageCode);
+  const target = card && card.card ? card.card : card;
+  if (!target || !target.code) {
+    const label = target?.name || card?.name || 'unknown card';
+    const keys = target && typeof target === 'object' ? Object.keys(target).join(',') : card && typeof card === 'object' ? Object.keys(card).join(',') : 'no data';
+    console.error('Card image lookup failed. Raw card value:', card);
+    throw new Error(`Card code is missing for "${label}" (${keys}). Check the deck entry and card data.`);
+  }
+
+  const imageCode = normalizeImageCode(target.code, defaultFace, options.face, target.name);
+  const identifier = sanitizeFileName(target.name || imageCode);
   const fileName = `${identifier || 'card'}-${imageCode}.png`;
   const filePath = path.join(cacheDir, fileName);
 
@@ -24,10 +32,11 @@ async function ensureCardImage(card, cacheDir, defaultFace, options = {}) {
   return filePath;
 }
 
-function normalizeImageCode(code, defaultFace, faceOverride) {
+function normalizeImageCode(code, defaultFace, faceOverride, cardName) {
   const trimmed = (code || '').trim();
   if (!trimmed) {
-    throw new Error('Card code is missing for an entry.');
+    const label = cardName || 'card';
+    throw new Error(`Card code is missing for "${label}". Check the deck entry and card data.`);
   }
   const normalized = trimmed.toLowerCase();
 

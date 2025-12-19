@@ -35,7 +35,7 @@ async function buildPdf({
   const gapPt = mmToPt(GAP_BETWEEN_CARDS_MM);
   const imageCache = new Map();
   const paddedCards = applyProxyPageBreaks(cards, cardsPerPage);
-  const cardEntries = paddedCards.map(card => resolveCardFaces(normalizeDeckCard(card), face, cardIndex));
+  const cardEntries = paddedCards.map(card => (card ? resolveCardFaces(normalizeDeckCard(card), face, cardIndex) : null));
   const pagePlan = buildPagePlan(cardEntries, cardsPerPage);
   const totalPages = pagePlan.length || 1;
   const layout = computeGridLayout({
@@ -64,6 +64,9 @@ async function buildPdf({
       const slot = pageConfig.slots[slotIndex];
       if (!slot || !slot.card) continue;
 
+      const card = slot.card && slot.card.card ? slot.card.card : slot.card;
+      if (!card) continue;
+
       drawCardBackground(page, {
         x: x - bleedPt,
         y: y - bleedPt,
@@ -71,7 +74,7 @@ async function buildPdf({
         height: scaledHeight + bleedPt * 2,
         color: cardBackgroundColor,
       });
-      const imagePath = await ensureCardImage(slot.card, cacheDir, face, { face: slot.face });
+      const imagePath = await ensureCardImage(card, cacheDir, face, { face: slot.face });
       const embedded = await embedImage(pdfDoc, imagePath, imageCache);
       drawCardImage(page, embedded, {
         x,
@@ -167,11 +170,11 @@ function buildPagePlan(cardEntries, cardsPerPage) {
       isBack: false,
     });
 
-    if (slice.some(entry => entry.backFace)) {
+    if (slice.some(entry => entry && entry.backFace)) {
       const backSlots = fillSlots(
         slice,
         cardsPerPage,
-        entry => (entry.backFace ? { card: entry.backCard || entry.card, face: entry.backFace } : null)
+        entry => (entry && entry.backFace ? { card: entry.backCard || entry.card, face: entry.backFace } : null)
       );
       // Reverse each row for double-sided printing alignment
       // When the page is flipped, the back needs to be reversed row by row
@@ -223,7 +226,9 @@ function applyProxyPageBreaks(cards, cardsPerPage) {
 function fillSlots(entries, size, mapFn) {
   const slots = new Array(size).fill(null);
   for (let i = 0; i < entries.length && i < size; i++) {
-    slots[i] = mapFn(entries[i]);
+    if (entries[i]) {
+      slots[i] = mapFn(entries[i]);
+    }
   }
   return slots;
 }

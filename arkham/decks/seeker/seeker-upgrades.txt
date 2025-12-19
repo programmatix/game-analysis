@@ -1,4 +1,4 @@
-Generic good seeker upgrades
+// Generic good seeker upgrades
 
 ## Protection
 2 forewarned # 1XP
@@ -14,7 +14,7 @@ Generic good seeker upgrades
 ## Help seeking
 2 arcane insight # 2x3XP
 //? 4 XP. 3 cost. Asset. Spell. Arcane slot. Uses (3 charges). [free] While an investigator is taking his or her turn, spend 1 charge: Your location gets -2 shroud until the end of this turn. (Limit once per turn.)
-2 archaic glyphs[03193] # 2x3XP
+//2 archaic glyphs[03193] # 2x3XP
 //? 3 XP. 2 cost. Asset. Spell. Arcane slot. Researched. Uses (3 charges). [action] Spend 1 charge: Investigate. If you succeed, you may automatically evade an engaged enemy. This action does not provoke attacks of opportunity.
 2 Death • XIII # 2x1XP
 //? 1 XP. 3 cost. Asset. Tarot. Tarot slot. You get +1 [intellect]. [reaction] When the game begins, if Death • XIII is in your opening hand: Put it into play.
@@ -40,16 +40,16 @@ Generic good seeker upgrades
 //? 3 XP. 2 cost. Asset. Item, Tome. Hand slot. Uses (2 secrets). [action] Exhaust Old Book of Lore: Choose an investigator at your location. That investigator searches the top 3 cards of their deck for a card, draws it, and shuffles their deck. Then, you may spend 1 secret to have that investigator immediately play that card, reducing its cost by 2.
 2 glimpse the unthinkable[60221] # 1XP
 //? 1 XP. 0 cost. Event. Insight. Draw 1 card. Shuffle any number of non-weakness cards from your hand into your deck. Then, draw that many cards.
-2 glimpse the unthinkable[05318] # 1XP
+//2 glimpse the unthinkable[05318] # 1XP
 //? 5 XP. 1 cost. Event. Insight. Shuffle any number of non-weakness cards from your hand into your deck. Draw cards until you reach your maximum hand-size. Remove Glimpse the Unthinkable from the game.
 
 ## Tutoring
-2 no stone unturned[03307] # 5XP
+//2 no stone unturned[03307] # 5XP
 //? 5 XP. 2 cost. Event. Insight. Fast. Play during any [free] player window. Choose an investigator at your location. That investigator searches his or her deck for a card, draws it, and shuffles his or her deck.
 // Very strong but very expensive tutor.
 
 ## Evasion
-2 survey the area # 2x1XP
+//2 survey the area # 2x1XP
 //? 1 XP. 0 cost. Skill. Practiced, Expert. While Survey the Area is in your hand or committed to a skill test, it gains [intellect] icons equal to your [agility], and [agility] icons equal to your [intellect].
 
 ## Resources
@@ -65,7 +65,7 @@ Generic good seeker upgrades
 # 2 Medical texts[08038] # 2x2XP
 1 higher education[02187] [permanent] # 2x3XP
 //? 3 XP. 0 cost. Asset. Talent. Permanent. While you have 5 or more cards in your hand, Higher Education gains: "[free] Spend 1 resource: You get +2 [willpower] for this skill test. [free] Spend 1 resource: You get +2 [intellect] for this skill test."
-1 miskatonic archaeology funding [permanent] # 4XP
+//1 miskatonic archaeology funding [permanent] # 4XP
 //? 4 XP. 0 cost. Asset. Grant. Permanent. Limit 1 per deck. You have 2 additional ally slots, which can only be used to hold [[Miskatonic]] assets. Forced - When you take damage or horror: No more than 1 of that damage/horror can be assigned to a [[Miskatonic]] asset.
 1 studious [permanent] # 3XP
 //? 3 XP. 0 cost. Asset. Talent. Permanent. You begin each game with 1 additional card in your opening hand.
