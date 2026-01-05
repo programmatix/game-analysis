@@ -4,19 +4,20 @@ const { sanitizeFileName } = require('../../shared/deck-utils');
 
 const DEFAULT_BASE_URL = 'https://marvelcdb.com';
 
-function resolveImageUrl(imageSrc, baseUrl = DEFAULT_BASE_URL) {
+function resolveImageUrl(imageSrc, baseUrl = DEFAULT_BASE_URL, context = {}) {
   const raw = typeof imageSrc === 'string' ? imageSrc.trim() : '';
   if (!raw) {
-    throw new Error('Card image source is missing.');
+    const label = typeof context.label === 'string' ? context.label.trim() : '';
+    throw new Error(label ? `Card image source is missing for "${label}".` : 'Card image source is missing.');
   }
 
   if (/^https?:\/\//i.test(raw)) return raw;
   return new URL(raw.startsWith('/') ? raw : `/${raw}`, baseUrl).toString();
 }
 
-async function ensureCardImage({ card, imageSrc }, cacheDir, options = {}) {
+async function ensureCardImage({ card, imageSrc, face }, cacheDir, options = {}) {
   const baseUrl = options.baseUrl || DEFAULT_BASE_URL;
-  const url = resolveImageUrl(imageSrc || card?.imagesrc, baseUrl);
+  const url = resolveImageUrl(imageSrc || card?.imagesrc, baseUrl, { label: formatCardLabel(card, face) });
   const urlPath = new URL(url).pathname;
   const basename = path.basename(urlPath);
   const ext = (path.extname(basename) || '.png').toLowerCase();
@@ -37,6 +38,21 @@ async function ensureCardImage({ card, imageSrc }, cacheDir, options = {}) {
   const buffer = Buffer.from(await response.arrayBuffer());
   await fs.promises.writeFile(filePath, buffer);
   return filePath;
+}
+
+function formatCardLabel(card, face) {
+  if (!card || typeof card !== 'object') {
+    return face ? `unknown card (${face})` : 'unknown card';
+  }
+
+  const name = typeof card.name === 'string' ? card.name.trim() : '';
+  const code = card.code != null ? String(card.code).trim() : '';
+  const faceSuffix = face ? ` [${face}]` : '';
+
+  if (name && code) return `${name} (${code})${faceSuffix}`;
+  if (name) return `${name}${faceSuffix}`;
+  if (code) return `code ${code}${faceSuffix}`;
+  return face ? `unknown card (${face})` : 'unknown card';
 }
 
 async function embedImage(pdfDoc, imagePath, cache) {

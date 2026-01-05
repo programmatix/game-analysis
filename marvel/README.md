@@ -70,14 +70,8 @@ Search the cached MarvelCDB database by name/rules text and print matching cards
 
 ```bash
 npx marvel-search spider man
-npx marvel-search --type ally --aspect justice
-npx marvel-search --type ally --aspect justice --cost 2-
-```
-
-To generate deck-list snippets with `//?` annotations (for pasting into a deck file):
-
-```bash
-npx marvel-search --annotate "Web-Shooter"
+npx marvel-search --type ally --aspect justice --annotate
+npx marvel-search --type ally --aspect justice --cost 2- --annotate
 ```
 
 ### Pack deck lists

@@ -113,7 +113,7 @@ function normalizeDeckCard(cardOrEntry) {
 function resolveCardFaces(deckCard, cardIndex) {
   const card = deckCard?.card || deckCard;
   const skipBack = Boolean(deckCard?.skipBack);
-  const front = { card, imageSrc: card?.imagesrc };
+  const front = { card, imageSrc: card?.imagesrc, face: 'front' };
 
   if (skipBack) {
     return { front, back: null };
@@ -127,23 +127,23 @@ function resolveBackTarget(card, cardIndex) {
   if (!card) return null;
 
   if (card.double_sided && card.backimagesrc) {
-    return { card, imageSrc: card.backimagesrc };
+    return { card, imageSrc: card.backimagesrc, face: 'back' };
   }
 
   if (card.backimagesrc) {
-    return { card, imageSrc: card.backimagesrc };
+    return { card, imageSrc: card.backimagesrc, face: 'back' };
   }
 
   const linkedCode = card.linked_to_code ? String(card.linked_to_code).trim() : '';
   if (linkedCode) {
     const linked = cardIndex?.get(linkedCode) || card.linked_card;
     if (linked && linked.imagesrc) {
-      return { card: linked, imageSrc: linked.imagesrc };
+      return { card: linked, imageSrc: linked.imagesrc, face: 'back' };
     }
   }
 
   if (card.linked_card && card.linked_card.imagesrc) {
-    return { card: card.linked_card, imageSrc: card.linked_card.imagesrc };
+    return { card: card.linked_card, imageSrc: card.linked_card.imagesrc, face: 'back' };
   }
 
   return null;
@@ -238,4 +238,3 @@ function drawCardBackground(page, { x, y, width, height, color }) {
 module.exports = {
   buildPdf,
 };
-

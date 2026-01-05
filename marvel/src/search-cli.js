@@ -19,6 +19,7 @@ async function main() {
     .option('--pack <pack>', 'Filter by pack (code or name)')
     .option('--cost <number>', 'Filter by cost (e.g. 2, 2-, 2+)')
     .option('--code <code>', 'Filter by exact card code')
+    .option('--sort <mode>', 'Sort results by: cost|name', 'cost')
     .option('--limit <number>', 'Max results to print (0 = no limit)', '25')
     .option('--json', 'Output JSON instead of a formatted list', false)
     .option('--annotate', 'Output deck-style entries with //? annotations', false)
@@ -37,7 +38,8 @@ async function main() {
 
   const filters = parseFilters(options);
   const scope = normalizeScope(options.in);
-  const results = searchCards(cards, { query, scope, filters });
+  const sortMode = normalizeSort(options.sort);
+  const results = searchCards(cards, { query, scope, filters, sortMode });
   const limit = parseLimit(options.limit);
   const toPrint = limit === null ? results : results.slice(0, limit);
 
@@ -68,6 +70,12 @@ function normalizeScope(raw) {
   const scope = normalizeForSearch(raw);
   if (scope === 'name' || scope === 'text' || scope === 'traits' || scope === 'all') return scope;
   throw new Error('--in must be one of: name, text, traits, all');
+}
+
+function normalizeSort(raw) {
+  const sort = normalizeForSearch(raw);
+  if (sort === 'cost' || sort === 'name') return sort;
+  throw new Error('--sort must be one of: cost, name');
 }
 
 function parseLimit(raw) {
@@ -128,7 +136,7 @@ function parseFilters(options) {
 }
 
 function searchCards(cards, options) {
-  const { query = '', scope = 'all', filters = {} } = options || {};
+  const { query = '', scope = 'all', filters = {}, sortMode = 'cost' } = options || {};
   const normalizedQuery = normalizeForSearch(query);
   const terms = normalizedQuery ? normalizedQuery.split(' ') : [];
 
@@ -137,6 +145,12 @@ function searchCards(cards, options) {
   const searched = terms.length ? filtered.filter(card => matchesQuery(card, terms, scope)) : filtered;
 
   searched.sort((a, b) => {
+    if (sortMode === 'cost') {
+      const costA = parseSortCost(a);
+      const costB = parseSortCost(b);
+      if (costA !== costB) return costA - costB;
+    }
+
     const nameA = normalizeForSearch(a?.name || a?.real_name || '');
     const nameB = normalizeForSearch(b?.name || b?.real_name || '');
     if (nameA < nameB) return -1;
@@ -145,6 +159,11 @@ function searchCards(cards, options) {
   });
 
   return searched;
+}
+
+function parseSortCost(card) {
+  const cost = Number(card?.cost);
+  return Number.isFinite(cost) ? cost : Number.POSITIVE_INFINITY;
 }
 
 function matchesFilters(card, filters) {
