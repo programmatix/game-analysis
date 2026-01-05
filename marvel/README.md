@@ -56,6 +56,14 @@ Resolves a deck list against MarvelCDB and emits a normalized list with explicit
 npx marvel-parse --input decks/sample-deck.txt --output decks/sample-deck-resolved.txt
 ```
 
+### Deck analyzer
+
+Print deck totals, ally count, aspect/basic breakdown, and an ASCII cost curve:
+
+```bash
+npx marvel-analyze --input decks/sample-deck.txt
+```
+
 ### Card search
 
 Search the cached MarvelCDB database by name/rules text and print matching cards:
