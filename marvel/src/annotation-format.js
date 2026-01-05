@@ -3,10 +3,8 @@ const ANNOTATION_PREFIX = '//? ';
 function buildCardComment(card, options = {}) {
   const parts = [];
 
-  const core = formatCoreSetIndicator(card, options);
-  if (core) {
-    parts.push(core);
-  }
+  const tags = formatPackTags(card, options);
+  if (tags) parts.push(tags);
 
   const type = formatType(card);
   const faction = formatFaction(card);
@@ -41,18 +39,23 @@ function buildCardComment(card, options = {}) {
   return parts.join(' ').replace(/\s+/g, ' ').trim();
 }
 
-function formatCoreSetIndicator(card, options) {
-  const membership = options?.coreSetMembership;
-  if (!(membership instanceof Set)) return '';
+function formatPackTags(card, options) {
+  const packIndex = options?.canonicalPackCodes;
+  if (!(packIndex instanceof Map)) return '';
 
-  const inCore = cardExistsInCoreSet(card, membership, options?.cardIndex);
-  return inCore ? '[Core]' : '[Not Core]';
-}
+  const canonicalCode = getCanonicalCode(card, options?.cardIndex);
+  if (!canonicalCode) return '';
 
-function cardExistsInCoreSet(card, membership, cardIndex) {
-  const canonicalCode = getCanonicalCode(card, cardIndex);
-  if (!canonicalCode) return false;
-  return membership.has(canonicalCode);
+  const packs = packIndex.get(canonicalCode);
+  if (!(packs instanceof Set) || packs.size === 0) return '';
+
+  if (packs.has('core')) return '[core]';
+
+  return Array.from(packs)
+    .filter(Boolean)
+    .sort()
+    .map(pack => `[${pack}]`)
+    .join(' ');
 }
 
 function getCanonicalCode(card, cardIndex) {

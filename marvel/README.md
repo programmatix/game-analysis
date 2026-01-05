@@ -42,7 +42,7 @@ Useful flags:
 ### Deck annotator
 
 Adds inline comments (prefixed with `//?`) with type/aspect, cost, stats, traits, and rules text for each card. Re-running replaces any previous `//?` annotations:
-Annotations start with `[Core]` or `[Not Core]` based on whether the card appears in the Core Set (`pack_code: core`).
+Annotations start with pack tags like `[core]` based on the card's `pack_code` (if a card appears in multiple packs and one is `core`, only `[core]` is shown).
 
 ```bash
 npx marvel-annotate --input decks/sample-deck.txt
