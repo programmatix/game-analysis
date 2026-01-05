@@ -3,6 +3,7 @@ const path = require('path');
 const { Command } = require('commander');
 const { normalizeForSearch } = require('../../shared/text-utils');
 const { loadCardDatabase } = require('./card-data');
+const { ANNOTATION_PREFIX, buildCardComment } = require('./annotation-format');
 
 async function main() {
   const program = new Command();
@@ -16,13 +17,17 @@ async function main() {
     .option('--type <type>', 'Filter by card type (code or name)')
     .option('--aspect <aspect>', 'Filter by aspect/faction (code or name)')
     .option('--pack <pack>', 'Filter by pack (code or name)')
-    .option('--cost <number>', 'Filter by exact cost')
+    .option('--cost <number>', 'Filter by cost (e.g. 2, 2-, 2+)')
     .option('--code <code>', 'Filter by exact card code')
     .option('--limit <number>', 'Max results to print (0 = no limit)', '25')
     .option('--json', 'Output JSON instead of a formatted list', false)
+    .option('--annotate', 'Output deck-style entries with //? annotations', false)
     .parse(process.argv);
 
   const options = program.opts();
+  if (options.json && options.annotate) {
+    throw new Error('Use only one of --json or --annotate');
+  }
   const query = buildQuery(program.args);
 
   const cards = await loadCardDatabase({
@@ -38,6 +43,11 @@ async function main() {
 
   if (Boolean(options.json)) {
     process.stdout.write(`${JSON.stringify(toPrint, null, 2)}\n`);
+  } else if (Boolean(options.annotate)) {
+    for (const card of toPrint) {
+      process.stdout.write(`${formatDeckEntryLine(card)}\n`);
+      process.stdout.write(`${ANNOTATION_PREFIX}${buildCardComment(card)}\n`);
+    }
   } else {
     for (const card of toPrint) {
       process.stdout.write(`${formatCardLine(card)}\n`);
@@ -79,6 +89,27 @@ function parseOptionalNumber(raw) {
   return value;
 }
 
+function parseCostFilter(raw) {
+  if (raw === null || raw === undefined) return null;
+  const trimmed = String(raw).trim();
+  if (!trimmed) return null;
+
+  const match = /^(\d+(?:\.\d+)?)([+-])?$/.exec(trimmed);
+  if (!match) {
+    throw new Error(`--cost must be like "2", "2-", or "2+" (got "${raw}")`);
+  }
+
+  const value = Number(match[1]);
+  if (!Number.isFinite(value)) {
+    throw new Error(`--cost must be a number (got "${raw}")`);
+  }
+
+  const suffix = match[2];
+  if (suffix === '+') return { op: 'gte', value };
+  if (suffix === '-') return { op: 'lte', value };
+  return { op: 'eq', value };
+}
+
 function parseFilters(options) {
   const filterText = value => (value ? normalizeForSearch(value) : '');
 
@@ -92,7 +123,7 @@ function parseFilters(options) {
     type: filterText(options.type),
     aspect: filterText(options.aspect),
     pack: filterText(options.pack),
-    cost: parseOptionalNumber(options.cost),
+    cost: parseCostFilter(options.cost),
   };
 }
 
@@ -124,7 +155,12 @@ function matchesFilters(card, filters) {
   }
 
   if (filters.cost !== null) {
-    if (Number(card.cost) !== filters.cost) return false;
+    const cost = Number(card.cost);
+    if (!Number.isFinite(cost)) return false;
+
+    if (filters.cost.op === 'eq' && cost !== filters.cost.value) return false;
+    if (filters.cost.op === 'lte' && cost > filters.cost.value) return false;
+    if (filters.cost.op === 'gte' && cost < filters.cost.value) return false;
   }
 
   if (filters.type) {
@@ -225,8 +261,20 @@ function formatCardLine(card) {
   return `${code || '(no code)'} ${label || '(no name)'}${suffix}`.trim();
 }
 
+function formatDeckEntryLine(card) {
+  const code = String(card?.code || '').trim();
+  const name = String(card?.name || card?.real_name || '').trim();
+  const subname = String(card?.subname || '').trim();
+  const label = subname ? `${name} — ${subname}` : name;
+
+  const parts = ['1x', label || '(no name)'];
+  if (code) {
+    parts.push(`[${code}]`);
+  }
+  return parts.join(' ').trim();
+}
+
 main().catch(err => {
   console.error(err instanceof Error ? err.message : err);
   process.exit(1);
 });
-

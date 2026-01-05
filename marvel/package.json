@@ -7,7 +7,8 @@
     "marvel-annotate": "src/annotate-cli.js",
     "marvel-parse": "src/parse-cli.js",
     "marvel-search": "src/search-cli.js",
-    "marvel-analyze": "src/analyze-cli.js"
+    "marvel-analyze": "src/analyze-cli.js",
+    "marvel-pack": "src/pack-cli.js"
   },
   "type": "commonjs",
   "scripts": {

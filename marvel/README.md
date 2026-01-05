@@ -71,4 +71,21 @@ Search the cached MarvelCDB database by name/rules text and print matching cards
 ```bash
 npx marvel-search spider man
 npx marvel-search --type ally --aspect justice
+npx marvel-search --type ally --aspect justice --cost 2-
+```
+
+To generate deck-list snippets with `//?` annotations (for pasting into a deck file):
+
+```bash
+npx marvel-search --annotate "Web-Shooter"
+```
+
+### Pack deck lists
+
+Generate a deck list containing all cards from a given Marvel Champions pack (useful for proxying a hero/scenario pack):
+
+```bash
+npx marvel-pack --list-packs
+npx marvel-pack core --kind hero
+npx marvel-pack "Green Goblin" --kind scenario
 ```
