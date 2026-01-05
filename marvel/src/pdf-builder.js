@@ -51,6 +51,8 @@ async function buildPdf({
     pageHeight: A4_HEIGHT_PT,
   });
 
+  await preflightCardImages(pagePlan, cacheDir, { baseUrl });
+
   for (let pageIndex = 0; pageIndex < pagePlan.length; pageIndex += 1) {
     const pageConfig = pagePlan[pageIndex];
     const page = pdfDoc.addPage([A4_WIDTH_PT, A4_HEIGHT_PT]);
@@ -98,6 +100,64 @@ async function buildPdf({
   }
 
   return pdfDoc.save();
+}
+
+async function preflightCardImages(pagePlan, cacheDir, options = {}) {
+  const baseUrl = options.baseUrl;
+  const attempted = new Set();
+  const failures = [];
+
+  for (const page of pagePlan) {
+    for (const slot of page?.slots || []) {
+      if (!slot?.card) continue;
+
+      const cardRef = slot.card;
+      const card = cardRef.card;
+      const face = cardRef.face || '';
+      const src = (cardRef.imageSrc || card?.imagesrc || '').trim();
+      const identity = card?.code != null ? String(card.code).trim() : String(card?.name || '').trim();
+      const attemptKey = `${identity}::${face}::${src}`;
+      if (attempted.has(attemptKey)) continue;
+      attempted.add(attemptKey);
+
+      try {
+        await ensureCardImage(cardRef, cacheDir, { baseUrl });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        failures.push(message);
+      }
+    }
+  }
+
+  if (!failures.length) return;
+
+  throw new Error(formatPreflightErrors(failures));
+}
+
+function formatPreflightErrors(failures) {
+  const counts = new Map();
+  for (const failure of failures) {
+    const key = String(failure || 'Unknown error');
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+
+  const entries = [...counts.entries()].sort((a, b) => {
+    if (b[1] !== a[1]) return b[1] - a[1];
+    return a[0].localeCompare(b[0]);
+  });
+
+  const total = failures.length;
+  const lines = [`Proxy generation failed with ${total} image issue${total === 1 ? '' : 's'}:`];
+
+  const maxLines = 50;
+  for (const [message, count] of entries.slice(0, maxLines)) {
+    lines.push(`- ${message}${count > 1 ? ` (x${count})` : ''}`);
+  }
+  if (entries.length > maxLines) {
+    lines.push(`- ...and ${entries.length - maxLines} more`);
+  }
+
+  return lines.join('\n');
 }
 
 function normalizeDeckCard(cardOrEntry) {

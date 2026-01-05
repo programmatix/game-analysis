@@ -74,6 +74,8 @@ npx marvel-search --type ally --aspect justice --annotate
 npx marvel-search --type ally --aspect justice --cost 2- --annotate
 ```
 
+Supported `--type` codes: `ally`, `alter_ego`, `attachment`, `environment`, `event`, `hero`, `minion`, `obligation`, `player_side_scheme`, `resource`, `side_scheme`, `support`, `treachery`, `upgrade`.
+
 ### Pack deck lists
 
 Generate a deck list containing all cards from a given Marvel Champions pack (useful for proxying a hero/scenario pack):

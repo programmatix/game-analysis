@@ -5,7 +5,30 @@ const { normalizeForSearch } = require('../../shared/text-utils');
 const { loadCardDatabase } = require('./card-data');
 const { ANNOTATION_PREFIX, buildCardComment } = require('./annotation-format');
 
+const SUPPORTED_TYPE_CODES = [
+  'ally',
+  'alter_ego',
+  'attachment',
+  'environment',
+  'event',
+  'hero',
+  'minion',
+  'obligation',
+  'player_side_scheme',
+  'resource',
+  'side_scheme',
+  'support',
+  'treachery',
+  'upgrade',
+];
+
 async function main() {
+  for (const stream of [process.stdout, process.stderr]) {
+    stream.on('error', err => {
+      if (err && err.code === 'EPIPE') process.exit(0);
+    });
+  }
+
   const program = new Command();
   program
     .name('marvel-search')
@@ -14,7 +37,7 @@ async function main() {
     .option('--data-cache <file>', 'Where to cache MarvelCDB cards JSON', path.join('.cache', 'marvelcdb-cards.json'))
     .option('--refresh-data', 'Re-download the MarvelCDB cards JSON into the cache', false)
     .option('--in <scope>', 'Search scope: name|text|traits|all', 'all')
-    .option('--type <type>', 'Filter by card type (code or name)')
+    .option('--type <type>', 'Filter by card type (code or name; see supported codes below)')
     .option('--aspect <aspect>', 'Filter by aspect/faction (code or name)')
     .option('--pack <pack>', 'Filter by pack (code or name)')
     .option('--cost <number>', 'Filter by cost (e.g. 2, 2-, 2+)')
@@ -23,6 +46,10 @@ async function main() {
     .option('--limit <number>', 'Max results to print (0 = no limit)', '25')
     .option('--json', 'Output JSON instead of a formatted list', false)
     .option('--annotate', 'Output deck-style entries with //? annotations', false)
+    .addHelpText(
+      'after',
+      `\nSupported --type codes:\n  ${SUPPORTED_TYPE_CODES.join(', ')}\n`,
+    )
     .parse(process.argv);
 
   const options = program.opts();
