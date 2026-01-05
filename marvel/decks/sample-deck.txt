@@ -1,0 +1,8 @@
+# Minimal sample list (not a legal deck)
+1 Spider-Man[01001a]
+1 Aunt May
+2x Web-Shooter (core, 8)
+3 Backflip
+3 Energy
+3 Genius
+

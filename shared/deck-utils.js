@@ -69,7 +69,7 @@ function parseDeckList(text, options = {}) {
       continue;
     }
 
-    const match = /^(\d+)\s+(.+)$/.exec(trimmed);
+    const match = /^(\d+)\s*(?:x|×)\s+(.+)$/.exec(trimmed) || /^(\d+)\s+(.+)$/.exec(trimmed);
     if (!match) {
       console.warn(`Skipping line "${line}" - expected format "<count> <card name>"`);
       continue;

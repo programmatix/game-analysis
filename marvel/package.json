@@ -1,0 +1,18 @@
+{
+  "name": "marvel-proxy",
+  "version": "1.0.0",
+  "description": "CLI tools to parse Marvel Champions deck lists, annotate them, and render printable proxy PDFs.",
+  "bin": {
+    "marvel-proxy": "src/cli.js",
+    "marvel-annotate": "src/annotate-cli.js",
+    "marvel-parse": "src/parse-cli.js"
+  },
+  "type": "commonjs",
+  "scripts": {
+    "test": "echo \"No tests defined\" && exit 0"
+  },
+  "dependencies": {
+    "commander": "^14.0.2",
+    "pdf-lib": "^1.17.1"
+  }
+}
