@@ -1,5 +1,0 @@
-# Gives us a good chance of drawing a weapon early on, while still being cheap enough for a penniless L0 guardian to afford.
-2 Kukri [weapon]
-2 survival knife[04017] [weapon]
-2 trench knife [weapon]
-#2 knife [weapon]
