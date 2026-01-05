@@ -103,3 +103,15 @@ List every pack or box needed for a deck using the full names from arkhamdb:
 ```bash
 npx arkham-sets --input deck.txt
 ```
+
+### Scenario deck list
+
+Generate a deck list for a scenario/encounter set (suitable for piping into `arkham-proxy`):
+
+```bash
+npx arkham-scenario --scenario the_gathering > encounters.txt
+# or match by name
+npx arkham-scenario --scenario "The Wages of Sin" > wages-of-sin.txt
+```
+
+Use `--list` to print all available encounter codes and names.
