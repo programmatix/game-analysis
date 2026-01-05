@@ -38,6 +38,12 @@ async function main() {
   });
   const { lookup, cardIndex } = buildCardLookup(cards);
 
+  const failures = collectResolutionFailures(deckText, lookup, cardIndex, { defaultFace: options.face });
+  if (failures.length) {
+    const joined = failures.join('\n\n');
+    throw new Error(`Found ${failures.length} parsing failure${failures.length === 1 ? '' : 's'}:\n\n${joined}`);
+  }
+
   const annotated = annotateDeckText(deckText, lookup, cardIndex, { defaultFace: options.face });
   const outPath = options.output ? path.resolve(options.output) : options.input ? path.resolve(options.input) : null;
   if (!outPath) return process.stdout.write(annotated);
@@ -51,6 +57,7 @@ function annotateDeckText(deckText, lookup, cardIndex, options = {}) {
   const lines = deckText.split(/\r?\n/);
   const output = [];
   let inBlockComment = false;
+  const lineEnding = deckText.includes('\r\n') ? '\r\n' : '\n';
   const hasTrailingNewline = deckText.endsWith('\n');
 
   for (let index = 0; index < lines.length; index += 1) {
@@ -92,8 +99,39 @@ function annotateDeckText(deckText, lookup, cardIndex, options = {}) {
     output.push(line);
   }
 
-  const joined = output.join('\n');
-  return hasTrailingNewline ? `${joined}\n` : joined;
+  const joined = output.join(lineEnding);
+  return hasTrailingNewline ? `${joined}${lineEnding}` : joined;
+}
+
+function collectResolutionFailures(deckText, lookup, cardIndex, options = {}) {
+  const failures = [];
+  const lines = deckText.split(/\r?\n/);
+  let inBlockComment = false;
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const { text, nextInBlock } = stripBlockCommentsFromLine(line, inBlockComment);
+    inBlockComment = nextInBlock;
+
+    const parseCandidate = stripLineComment(text).trim();
+    if (!parseCandidate || inBlockComment) continue;
+
+    if (/^\[proxypagebreak\]$/i.test(parseCandidate) || /^\[include:[^\]]+\]$/i.test(parseCandidate)) {
+      continue;
+    }
+
+    const entry = parseDeckLine(parseCandidate);
+    if (!entry) continue;
+
+    try {
+      resolveCard(entry, lookup, cardIndex, { defaultFace: options.defaultFace });
+    } catch (err) {
+      const prefix = `Line ${index + 1}: ${line.trim()}`;
+      failures.push(`${prefix}\n${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  return failures;
 }
 
 function parseDeckLine(text) {

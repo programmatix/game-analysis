@@ -1,0 +1,232 @@
+#!/usr/bin/env node
+const path = require('path');
+const { Command } = require('commander');
+const { normalizeForSearch } = require('../../shared/text-utils');
+const { loadCardDatabase } = require('./card-data');
+
+async function main() {
+  const program = new Command();
+  program
+    .name('marvel-search')
+    .description('Search MarvelCDB cards (name/text/aspect/type/pack)')
+    .argument('[query...]', 'Search terms (default: match name and rules text)')
+    .option('--data-cache <file>', 'Where to cache MarvelCDB cards JSON', path.join('.cache', 'marvelcdb-cards.json'))
+    .option('--refresh-data', 'Re-download the MarvelCDB cards JSON into the cache', false)
+    .option('--in <scope>', 'Search scope: name|text|traits|all', 'all')
+    .option('--type <type>', 'Filter by card type (code or name)')
+    .option('--aspect <aspect>', 'Filter by aspect/faction (code or name)')
+    .option('--pack <pack>', 'Filter by pack (code or name)')
+    .option('--cost <number>', 'Filter by exact cost')
+    .option('--code <code>', 'Filter by exact card code')
+    .option('--limit <number>', 'Max results to print (0 = no limit)', '25')
+    .option('--json', 'Output JSON instead of a formatted list', false)
+    .parse(process.argv);
+
+  const options = program.opts();
+  const query = buildQuery(program.args);
+
+  const cards = await loadCardDatabase({
+    cachePath: options.dataCache,
+    refresh: Boolean(options.refreshData),
+  });
+
+  const filters = parseFilters(options);
+  const scope = normalizeScope(options.in);
+  const results = searchCards(cards, { query, scope, filters });
+  const limit = parseLimit(options.limit);
+  const toPrint = limit === null ? results : results.slice(0, limit);
+
+  if (Boolean(options.json)) {
+    process.stdout.write(`${JSON.stringify(toPrint, null, 2)}\n`);
+  } else {
+    for (const card of toPrint) {
+      process.stdout.write(`${formatCardLine(card)}\n`);
+    }
+  }
+
+  if (limit !== null && results.length > limit) {
+    process.stderr.write(`Showing ${limit} of ${results.length} matches (use --limit 0 for all).\n`);
+  }
+}
+
+function buildQuery(args) {
+  if (!Array.isArray(args) || args.length === 0) return '';
+  return args.join(' ').trim();
+}
+
+function normalizeScope(raw) {
+  const scope = normalizeForSearch(raw);
+  if (scope === 'name' || scope === 'text' || scope === 'traits' || scope === 'all') return scope;
+  throw new Error('--in must be one of: name, text, traits, all');
+}
+
+function parseLimit(raw) {
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 0) {
+    throw new Error('--limit must be a non-negative integer (0 = no limit)');
+  }
+  return value === 0 ? null : value;
+}
+
+function parseOptionalNumber(raw) {
+  if (raw === null || raw === undefined) return null;
+  const trimmed = String(raw).trim();
+  if (!trimmed) return null;
+  const value = Number(trimmed);
+  if (!Number.isFinite(value)) {
+    throw new Error(`Expected a number, got "${raw}"`);
+  }
+  return value;
+}
+
+function parseFilters(options) {
+  const filterText = value => (value ? normalizeForSearch(value) : '');
+
+  const code = options.code ? String(options.code).trim() : '';
+  if (options.code && !code) {
+    throw new Error('--code cannot be empty');
+  }
+
+  return {
+    code,
+    type: filterText(options.type),
+    aspect: filterText(options.aspect),
+    pack: filterText(options.pack),
+    cost: parseOptionalNumber(options.cost),
+  };
+}
+
+function searchCards(cards, options) {
+  const { query = '', scope = 'all', filters = {} } = options || {};
+  const normalizedQuery = normalizeForSearch(query);
+  const terms = normalizedQuery ? normalizedQuery.split(' ') : [];
+
+  const canonical = canonicalizeCards(cards);
+  const filtered = canonical.filter(card => matchesFilters(card, filters));
+  const searched = terms.length ? filtered.filter(card => matchesQuery(card, terms, scope)) : filtered;
+
+  searched.sort((a, b) => {
+    const nameA = normalizeForSearch(a?.name || a?.real_name || '');
+    const nameB = normalizeForSearch(b?.name || b?.real_name || '');
+    if (nameA < nameB) return -1;
+    if (nameA > nameB) return 1;
+    return String(a?.code || '').localeCompare(String(b?.code || ''), 'en', { numeric: true });
+  });
+
+  return searched;
+}
+
+function matchesFilters(card, filters) {
+  if (!card) return false;
+
+  if (filters.code) {
+    if (String(card.code || '').trim() !== filters.code) return false;
+  }
+
+  if (filters.cost !== null) {
+    if (Number(card.cost) !== filters.cost) return false;
+  }
+
+  if (filters.type) {
+    const type = normalizeForSearch(card.type_code || card.type_name || '');
+    if (!type.includes(filters.type)) return false;
+  }
+
+  if (filters.aspect) {
+    const aspect = normalizeForSearch(card.faction_code || card.faction_name || '');
+    if (!aspect.includes(filters.aspect)) return false;
+  }
+
+  if (filters.pack) {
+    const pack = normalizeForSearch(card.pack_code || card.pack_name || '');
+    if (!pack.includes(filters.pack)) return false;
+  }
+
+  return true;
+}
+
+function matchesQuery(card, terms, scope) {
+  const haystack = buildSearchText(card, scope);
+  if (!haystack) return false;
+  return terms.every(term => haystack.includes(term));
+}
+
+function buildSearchText(card, scope) {
+  if (!card) return '';
+
+  const parts = [];
+
+  if (scope === 'name' || scope === 'all') {
+    parts.push(card.name, card.real_name);
+    if (card.subname) {
+      parts.push(card.subname, `${card.name || card.real_name} ${card.subname}`);
+    }
+  }
+
+  if (scope === 'text' || scope === 'all') {
+    parts.push(stripHtml(card.text));
+  }
+
+  if (scope === 'traits' || scope === 'all') {
+    parts.push(card.traits);
+  }
+
+  return normalizeForSearch(parts.filter(Boolean).join(' '));
+}
+
+function stripHtml(text) {
+  if (typeof text !== 'string') return '';
+  return text.replace(/<\/?[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function canonicalizeCards(cards) {
+  const cardIndex = new Map();
+  for (const card of Array.isArray(cards) ? cards : []) {
+    const code = card?.code ? String(card.code).trim() : '';
+    if (code) cardIndex.set(code, card);
+  }
+
+  const out = [];
+  const seen = new Set();
+  for (const raw of Array.isArray(cards) ? cards : []) {
+    if (!raw?.code) continue;
+
+    const dup = raw.duplicate_of_code ? String(raw.duplicate_of_code).trim() : '';
+    const canonical = dup ? cardIndex.get(dup) || raw : raw;
+    const canonicalCode = canonical?.code ? String(canonical.code).trim() : '';
+    if (!canonicalCode || seen.has(canonicalCode)) continue;
+    seen.add(canonicalCode);
+    out.push(canonical);
+  }
+
+  return out;
+}
+
+function formatCardLine(card) {
+  const code = String(card?.code || '').trim();
+  const name = String(card?.name || card?.real_name || '').trim();
+  const subname = String(card?.subname || '').trim();
+
+  const label = subname ? `${name} — ${subname}` : name;
+  const type = String(card?.type_name || card?.type_code || '').trim();
+  const aspect = String(card?.faction_name || card?.faction_code || '').trim();
+  const cost = card?.cost === 0 || Number.isFinite(card?.cost) ? String(card.cost) : '';
+  const pack = String(card?.pack_name || card?.pack_code || '').trim();
+  const position = Number.isFinite(card?.position) ? `#${card.position}` : '';
+
+  const metaParts = [];
+  if (type && aspect) metaParts.push(`${type} (${aspect})`);
+  else if (type) metaParts.push(type);
+  else if (aspect) metaParts.push(aspect);
+  if (cost) metaParts.push(`Cost ${cost}`);
+  if (pack || position) metaParts.push([pack, position].filter(Boolean).join(' '));
+
+  const suffix = metaParts.length ? ` — ${metaParts.join(' — ')}` : '';
+  return `${code || '(no code)'} ${label || '(no name)'}${suffix}`.trim();
+}
+
+main().catch(err => {
+  console.error(err instanceof Error ? err.message : err);
+  process.exit(1);
+});
+

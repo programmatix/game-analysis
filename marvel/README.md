@@ -55,3 +55,12 @@ Resolves a deck list against MarvelCDB and emits a normalized list with explicit
 ```bash
 npx marvel-parse --input decks/sample-deck.txt --output decks/sample-deck-resolved.txt
 ```
+
+### Card search
+
+Search the cached MarvelCDB database by name/rules text and print matching cards:
+
+```bash
+npx marvel-search spider man
+npx marvel-search --type ally --aspect justice
+```

@@ -49,6 +49,7 @@ function annotateDeckText(deckText, lookup) {
   const lines = deckText.split(/\r?\n/);
   const output = [];
   let inBlockComment = false;
+  const lineEnding = deckText.includes('\r\n') ? '\r\n' : '\n';
   const hasTrailingNewline = deckText.endsWith('\n');
 
   for (let index = 0; index < lines.length; index += 1) {
@@ -85,8 +86,8 @@ function annotateDeckText(deckText, lookup) {
     output.push(line);
   }
 
-  const joined = output.join('\n');
-  return hasTrailingNewline ? `${joined}\n` : joined;
+  const joined = output.join(lineEnding);
+  return hasTrailingNewline ? `${joined}${lineEnding}` : joined;
 }
 
 function parseDeckLine(text) {
