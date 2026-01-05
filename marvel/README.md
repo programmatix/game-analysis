@@ -43,8 +43,10 @@ Useful flags:
 Adds inline comments (prefixed with `//?`) with type/aspect, cost, stats, traits, and rules text for each card. Re-running replaces any previous `//?` annotations:
 
 ```bash
-npx marvel-annotate --input decks/sample-deck.txt --output decks/sample-deck-annotated.txt
+npx marvel-annotate --input decks/sample-deck.txt
 ```
+
+Omit `--output` to overwrite `--input`; when reading from stdin, output is written to stdout.
 
 ### Deck parser (resolver)
 
@@ -53,4 +55,3 @@ Resolves a deck list against MarvelCDB and emits a normalized list with explicit
 ```bash
 npx marvel-parse --input decks/sample-deck.txt --output decks/sample-deck-resolved.txt
 ```
-

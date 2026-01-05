@@ -49,8 +49,10 @@ npx arkham-proxy --input deck.txt --name "Roland Solo"
 Add inline comments (prefixed with `//?`) with XP, cost, type, traits, slot, and text for each card. Re-running replaces any previous `//?` annotations:
 
 ```bash
-npx arkham-annotate --input deck.txt --output deck-with-notes.txt
+npx arkham-annotate --input deck.txt
 ```
+
+Omit `--output` to overwrite `--input`; when reading from stdin, output is written to stdout.
 
 ### Odds helper
 

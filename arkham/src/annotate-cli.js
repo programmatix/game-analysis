@@ -15,7 +15,7 @@ async function main() {
     .name('arkham-annotate')
     .description('Annotate Arkham Horror deck lists with per-card comments')
     .option('-i, --input <file>', 'Deck list file (defaults to stdin)')
-    .option('-o, --output <file>', 'Write output to a file instead of stdout')
+    .option('-o, --output <file>', 'Write output to a file (defaults to overwriting --input; otherwise stdout)')
     .option('--data-dir <dir>', 'Path to arkhamdb-json-data root', DEFAULT_DATA_DIR)
     .parse(process.argv);
 
@@ -37,12 +37,12 @@ async function main() {
   assertNoAmbiguousCards(parsedEntries, lookup);
 
   const annotated = annotateDeckText(deckText, lookup);
-  if (options.output) {
-    await fs.promises.writeFile(path.resolve(options.output), annotated);
-    console.log(`Wrote annotated deck to ${path.resolve(options.output)}`);
-  } else {
-    process.stdout.write(annotated);
-  }
+  const outPath = options.output ? path.resolve(options.output) : options.input ? path.resolve(options.input) : null;
+  if (!outPath) return process.stdout.write(annotated);
+
+  await fs.promises.mkdir(path.dirname(outPath), { recursive: true });
+  await fs.promises.writeFile(outPath, annotated);
+  console.log(`Wrote annotated deck to ${outPath}`);
 }
 
 function annotateDeckText(deckText, lookup) {

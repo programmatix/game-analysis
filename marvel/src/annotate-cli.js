@@ -14,7 +14,7 @@ async function main() {
     .name('marvel-annotate')
     .description('Annotate Marvel Champions deck lists with per-card comments')
     .option('-i, --input <file>', 'Deck list file (defaults to stdin)')
-    .option('-o, --output <file>', 'Write output to a file instead of stdout')
+    .option('-o, --output <file>', 'Write output to a file (defaults to overwriting --input; otherwise stdout)')
     .option('--data-cache <file>', 'Where to cache MarvelCDB cards JSON', path.join('.cache', 'marvelcdb-cards.json'))
     .option('--refresh-data', 'Re-download the MarvelCDB cards JSON into the cache', false)
     .option('--face <a|b>', 'Default face for numeric codes like [01001]', 'a')
@@ -39,14 +39,12 @@ async function main() {
   const { lookup, cardIndex } = buildCardLookup(cards);
 
   const annotated = annotateDeckText(deckText, lookup, cardIndex, { defaultFace: options.face });
-  if (options.output) {
-    const outPath = path.resolve(options.output);
-    await fs.promises.mkdir(path.dirname(outPath), { recursive: true });
-    await fs.promises.writeFile(outPath, annotated);
-    console.log(`Wrote annotated deck to ${outPath}`);
-  } else {
-    process.stdout.write(annotated);
-  }
+  const outPath = options.output ? path.resolve(options.output) : options.input ? path.resolve(options.input) : null;
+  if (!outPath) return process.stdout.write(annotated);
+
+  await fs.promises.mkdir(path.dirname(outPath), { recursive: true });
+  await fs.promises.writeFile(outPath, annotated);
+  console.log(`Wrote annotated deck to ${outPath}`);
 }
 
 function annotateDeckText(deckText, lookup, cardIndex, options = {}) {
