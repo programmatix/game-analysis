@@ -62,6 +62,53 @@ function canonicalizeCard(card, cardIndex) {
   return cardIndex.get(dup) || card;
 }
 
+function buildCoreSetMembership(cards, options = {}) {
+  const { corePackCode = 'core', cardIndex: providedIndex } = options;
+  const normalizedCore = normalizeName(corePackCode);
+  const cardIndex = providedIndex instanceof Map ? providedIndex : buildCardCodeIndex(cards);
+  const coreCanonicalCodes = new Set();
+
+  const isCorePack = card => normalizeName(card?.pack_code) === normalizedCore;
+
+  for (const raw of Array.isArray(cards) ? cards : []) {
+    if (!raw?.code) continue;
+
+    const canonical = canonicalizeCard(raw, cardIndex);
+    const canonicalCode = canonical?.code ? String(canonical.code).trim() : '';
+    if (!canonicalCode) continue;
+
+    if (isCorePack(raw) || isCorePack(canonical)) {
+      coreCanonicalCodes.add(canonicalCode);
+    }
+  }
+
+  return coreCanonicalCodes;
+}
+
+function buildCanonicalPackCodes(cards, options = {}) {
+  const { cardIndex: providedIndex } = options;
+  const cardIndex = providedIndex instanceof Map ? providedIndex : buildCardCodeIndex(cards);
+  const out = new Map(); // canonicalCode -> Set(pack_code)
+
+  for (const raw of Array.isArray(cards) ? cards : []) {
+    const canonical = canonicalizeCard(raw, cardIndex);
+    const canonicalCode = canonical?.code ? String(canonical.code).trim() : '';
+    if (!canonicalCode) continue;
+
+    const packCode = raw?.pack_code ? normalizeName(raw.pack_code) : '';
+    if (!packCode) continue;
+
+    const existing = out.get(canonicalCode);
+    if (existing) {
+      existing.add(packCode);
+    } else {
+      out.set(canonicalCode, new Set([packCode]));
+    }
+  }
+
+  return out;
+}
+
 function buildCardLookup(cards) {
   const cardIndex = buildCardCodeIndex(cards);
   const lookup = new Map();
@@ -240,6 +287,8 @@ module.exports = {
   loadCardDatabase,
   buildCardLookup,
   buildCardCodeIndex,
+  buildCoreSetMembership,
+  buildCanonicalPackCodes,
   resolveCard,
   resolveDeckCards,
 };

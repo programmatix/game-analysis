@@ -54,11 +54,25 @@ async function main() {
     defaultFace: options.face,
   });
 
-  const proxyCards = deckCards.map(item => {
+  const { deckCards: filteredDeckCards, skippedCoreCount } = filterCoreSetCards(deckCards, {
+    enabled: options.skipCore,
+  });
+  if (skippedCoreCount > 0) {
+    console.log(`Skipping ${skippedCoreCount} Core Set card${skippedCoreCount === 1 ? '' : 's'} due to --skip-core.`);
+  }
+
+  const proxyCards = filteredDeckCards.map(item => {
     if (item?.proxyPageBreak) return { proxyPageBreak: true };
     const { card, entry } = item;
     return { card, skipBack: shouldSkipBack(entry) };
   });
+
+  if (!proxyCards.some(entry => entry && entry.card)) {
+    if (options.skipCore && skippedCoreCount > 0) {
+      throw new Error('All resolved cards were from the Core Set and were skipped due to --skip-core; nothing to proxy.');
+    }
+    throw new Error('Nothing to proxy after applying filters.');
+  }
 
   await fs.promises.mkdir(options.cacheDir, { recursive: true });
 
@@ -122,8 +136,39 @@ function shouldSkipBack(entry) {
   return false;
 }
 
+function filterCoreSetCards(deckCards, options = {}) {
+  if (!Array.isArray(deckCards)) return { deckCards: [], skippedCoreCount: 0 };
+  if (!options.enabled) return { deckCards, skippedCoreCount: 0 };
+
+  let skippedCoreCount = 0;
+  const filtered = [];
+
+  for (const item of deckCards) {
+    if (item?.proxyPageBreak) {
+      filtered.push(item);
+      continue;
+    }
+
+    if (!item?.card) continue;
+    if (isCoreSetCard(item.card)) {
+      skippedCoreCount += 1;
+      continue;
+    }
+    filtered.push(item);
+  }
+
+  return { deckCards: filtered, skippedCoreCount };
+}
+
+function isCoreSetCard(card) {
+  const packCode = String(card?.pack_code || '').trim().toLowerCase();
+  if (packCode === 'core') return true;
+  const packName = String(card?.pack_name || '').trim().toLowerCase();
+  if (packName === 'core set') return true;
+  return false;
+}
+
 main().catch(err => {
   console.error(err instanceof Error ? err.message : err);
   process.exit(1);
 });
-

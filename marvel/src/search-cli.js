@@ -2,7 +2,7 @@
 const path = require('path');
 const { Command } = require('commander');
 const { normalizeForSearch } = require('../../shared/text-utils');
-const { loadCardDatabase } = require('./card-data');
+const { loadCardDatabase, buildCardCodeIndex, buildCoreSetMembership } = require('./card-data');
 const { ANNOTATION_PREFIX, buildCardComment } = require('./annotation-format');
 
 const SUPPORTED_TYPE_CODES = [
@@ -62,6 +62,8 @@ async function main() {
     cachePath: options.dataCache,
     refresh: Boolean(options.refreshData),
   });
+  const cardIndex = buildCardCodeIndex(cards);
+  const coreSetMembership = buildCoreSetMembership(cards, { cardIndex });
 
   const filters = parseFilters(options);
   const scope = normalizeScope(options.in);
@@ -75,7 +77,9 @@ async function main() {
   } else if (Boolean(options.annotate)) {
     for (const card of toPrint) {
       process.stdout.write(`${formatDeckEntryLine(card)}\n`);
-      process.stdout.write(`${ANNOTATION_PREFIX}${buildCardComment(card)}\n`);
+      process.stdout.write(
+        `${ANNOTATION_PREFIX}${buildCardComment(card, { coreSetMembership, cardIndex })}\n`,
+      );
     }
   } else {
     for (const card of toPrint) {

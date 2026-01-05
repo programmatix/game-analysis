@@ -1,7 +1,12 @@
 const ANNOTATION_PREFIX = '//? ';
 
-function buildCardComment(card) {
+function buildCardComment(card, options = {}) {
   const parts = [];
+
+  const core = formatCoreSetIndicator(card, options);
+  if (core) {
+    parts.push(core);
+  }
 
   const type = formatType(card);
   const faction = formatFaction(card);
@@ -34,6 +39,43 @@ function buildCardComment(card) {
   }
 
   return parts.join(' ').replace(/\s+/g, ' ').trim();
+}
+
+function formatCoreSetIndicator(card, options) {
+  const membership = options?.coreSetMembership;
+  if (!(membership instanceof Set)) return '';
+
+  const inCore = cardExistsInCoreSet(card, membership, options?.cardIndex);
+  return inCore ? '[Core]' : '[Not Core]';
+}
+
+function cardExistsInCoreSet(card, membership, cardIndex) {
+  const canonicalCode = getCanonicalCode(card, cardIndex);
+  if (!canonicalCode) return false;
+  return membership.has(canonicalCode);
+}
+
+function getCanonicalCode(card, cardIndex) {
+  const code = card?.code ? String(card.code).trim() : '';
+  if (!code) return '';
+
+  if (!(cardIndex instanceof Map)) return code;
+
+  let current = card;
+  const visited = new Set();
+  for (let hops = 0; hops < 10; hops += 1) {
+    const currentCode = current?.code ? String(current.code).trim() : '';
+    if (!currentCode || visited.has(currentCode)) break;
+    visited.add(currentCode);
+
+    const dup = current?.duplicate_of_code ? String(current.duplicate_of_code).trim() : '';
+    if (!dup) return currentCode;
+    const next = cardIndex.get(dup);
+    if (!next) return currentCode;
+    current = next;
+  }
+
+  return code;
 }
 
 function formatType(card) {
@@ -113,4 +155,3 @@ module.exports = {
   buildCardComment,
   isAnnotationLine,
 };
-

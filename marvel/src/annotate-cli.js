@@ -4,7 +4,7 @@ const path = require('path');
 const { Command } = require('commander');
 const { readDeckText, parseDeckList, parseNameWithCode, stripLineComment, hasCardEntries } = require('../../shared/deck-utils');
 const { splitMarvelCdbSuffix } = require('./decklist');
-const { loadCardDatabase, buildCardLookup, resolveCard } = require('./card-data');
+const { loadCardDatabase, buildCardLookup, buildCoreSetMembership, resolveCard } = require('./card-data');
 const { ANNOTATION_PREFIX, buildCardComment, isAnnotationLine } = require('./annotation-format');
 
 async function main() {
@@ -36,6 +36,7 @@ async function main() {
     refresh: Boolean(options.refreshData),
   });
   const { lookup, cardIndex } = buildCardLookup(cards);
+  const coreSetMembership = buildCoreSetMembership(cards, { cardIndex });
 
   const failures = collectResolutionFailures(deckText, lookup, cardIndex, { defaultFace: options.face });
   if (failures.length) {
@@ -43,7 +44,10 @@ async function main() {
     throw new Error(`Found ${failures.length} parsing failure${failures.length === 1 ? '' : 's'}:\n\n${joined}`);
   }
 
-  const annotated = annotateDeckText(deckText, lookup, cardIndex, { defaultFace: options.face });
+  const annotated = annotateDeckText(deckText, lookup, cardIndex, {
+    defaultFace: options.face,
+    coreSetMembership,
+  });
   const outPath = options.output ? path.resolve(options.output) : options.input ? path.resolve(options.input) : null;
   if (!outPath) return process.stdout.write(annotated);
 
@@ -77,7 +81,7 @@ function annotateDeckText(deckText, lookup, cardIndex, options = {}) {
       if (entry) {
         try {
           const card = resolveCard(entry, lookup, cardIndex, { defaultFace: options.defaultFace });
-          const comment = buildCardComment(card);
+          const comment = buildCardComment(card, { coreSetMembership: options.coreSetMembership, cardIndex });
           const annotationLine = `${indent}${ANNOTATION_PREFIX}${comment}`;
           output.push(line);
 

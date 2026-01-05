@@ -36,11 +36,13 @@ Useful flags:
 - `--cache-dir` controls where images download (default: `.cache/marvel-card-art`).
 - `--data-cache` controls where the MarvelCDB card JSON is stored (default: `.cache/marvelcdb-cards.json`).
 - `--face a|b` controls the default face for numeric codes like `[01001]` (default: `a`).
+- `--skip-core` skips cards whose `pack_code` is `core` (useful if you own only the Core Set).
 - Use `[skipproxy]` or `[skipback]` on a line to omit that card or its back.
 
 ### Deck annotator
 
 Adds inline comments (prefixed with `//?`) with type/aspect, cost, stats, traits, and rules text for each card. Re-running replaces any previous `//?` annotations:
+Annotations start with `[Core]` or `[Not Core]` based on whether the card appears in the Core Set (`pack_code: core`).
 
 ```bash
 npx marvel-annotate --input decks/sample-deck.txt

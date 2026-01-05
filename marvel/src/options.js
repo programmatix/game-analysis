@@ -15,6 +15,7 @@ function parseCliOptions() {
     .option('--refresh-data', 'Re-download the MarvelCDB cards JSON into the cache', false)
     .option('--cache-dir <dir>', 'Cache directory for downloaded card images', DEFAULT_CACHE_DIR)
     .option('--expected-size <number>', 'Warn when the total card count differs (0 disables)', '0')
+    .option('--skip-core', 'Skip cards from the Core Set (pack_code: core)', false)
     .option('--grid-size <number>', 'Grid size (NxN)', '3')
     .option('--card-width-mm <number>', 'Card width in millimetres', '63.5')
     .option('--card-height-mm <number>', 'Card height in millimetres', '88.9')
@@ -41,6 +42,7 @@ function parseCliOptions() {
     refreshData: Boolean(options.refreshData),
     cacheDir: path.resolve(options.cacheDir),
     expectedDeckSize,
+    skipCore: Boolean(options.skipCore),
     gridSize,
     cardWidthPt,
     cardHeightPt,
@@ -87,4 +89,3 @@ function parseScaleFactor(raw) {
 module.exports = {
   parseCliOptions,
 };
-
