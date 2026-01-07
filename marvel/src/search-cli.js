@@ -11,7 +11,12 @@ const SUPPORTED_TYPE_CODES = [
   'attachment',
   'environment',
   'event',
+  'evidence_means',
+  'evidence_motive',
+  'evidence_opportunity',
   'hero',
+  'leader',
+  'main_scheme',
   'minion',
   'obligation',
   'player_side_scheme',
@@ -20,6 +25,7 @@ const SUPPORTED_TYPE_CODES = [
   'support',
   'treachery',
   'upgrade',
+  'villain',
 ];
 
 async function main() {

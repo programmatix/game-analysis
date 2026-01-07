@@ -20,12 +20,14 @@ async function readDeckText(filePath) {
 }
 
 function parseDeckList(text, options = {}) {
-  const { baseDir = process.cwd(), _includeStack = [] } = options;
+  const { baseDir = process.cwd(), sourcePath = null, _includeStack = [] } = options;
   const sanitizedText = stripComments(text);
   const lines = sanitizedText.split(/\r?\n/);
   const entries = [];
 
-  for (const line of lines) {
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+    const line = lines[lineIndex];
+    const sourceLine = lineIndex + 1;
     const withoutLineComment = stripLineComment(line);
     const trimmed = withoutLineComment.trim();
     if (!trimmed) {
@@ -63,6 +65,7 @@ function parseDeckList(text, options = {}) {
 
       const nestedEntries = parseDeckList(includeText, {
         baseDir: path.dirname(includePath),
+        sourcePath: includePath,
         _includeStack: [..._includeStack, normalizedIncludePath],
       });
       entries.push(...nestedEntries);
@@ -88,7 +91,12 @@ function parseDeckList(text, options = {}) {
       continue;
     }
 
-    const entry = { count, name, code };
+    const entry = {
+      count,
+      name,
+      code,
+      source: { file: sourcePath, line: sourceLine, text: line },
+    };
     if (annotations && Object.keys(annotations).length > 0) {
       entry.annotations = annotations;
     }

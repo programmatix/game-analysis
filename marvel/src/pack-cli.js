@@ -5,9 +5,25 @@ const { Command } = require('commander');
 const { normalizeForSearch } = require('../../shared/text-utils');
 const { loadCardDatabase } = require('./card-data');
 
-const HERO_KIT_TYPE_CODES = new Set(['hero', 'alter_ego', 'obligation']);
-const PLAYER_TYPE_CODES = new Set(['ally', 'event', 'resource', 'support', 'upgrade', 'player_side_scheme']);
-const SCENARIO_TYPE_CODES = new Set(['attachment', 'environment', 'minion', 'side_scheme', 'treachery']);
+const HERO_KIT_TYPE_CODES = new Set(['hero', 'alter_ego', 'obligation'].map(normalizeForSearch));
+const PLAYER_TYPE_CODES = new Set(
+  ['ally', 'event', 'resource', 'support', 'upgrade', 'player_side_scheme'].map(normalizeForSearch)
+);
+const SCENARIO_TYPE_CODES = new Set(
+  [
+    'attachment',
+    'environment',
+    'evidence_means',
+    'evidence_motive',
+    'evidence_opportunity',
+    'leader',
+    'main_scheme',
+    'minion',
+    'side_scheme',
+    'treachery',
+    'villain',
+  ].map(normalizeForSearch)
+);
 
 async function main() {
   const program = new Command();
@@ -20,6 +36,11 @@ async function main() {
       '--kind <kind>',
       'Deck kind: auto|hero|scenario|all (auto infers hero vs scenario)',
       'auto'
+    )
+    .option(
+      '--hero-specific',
+      'Only output hero-specific cards (signature + obligation + nemesis); ignores --kind',
+      false
     )
     .option('--no-codes', 'Omit [code] suffixes in output')
     .option('--list-packs', 'List all packs found in the MarvelCDB data and exit', false)
@@ -48,8 +69,16 @@ async function main() {
   }
 
   const pack = resolvePack(packQuery, packs);
-  const kind = normalizeKind(options.kind, pack.cards);
-  const filtered = filterPackCards(pack.cards, kind);
+  const heroSpecific = Boolean(options.heroSpecific);
+  const kind = heroSpecific ? 'hero-specific' : 'all';
+  const filtered = heroSpecific
+    ? filterHeroSpecificPackCards(pack.cards)
+    : Array.isArray(pack.cards)
+      ? pack.cards.slice()
+      : [];
+  if (heroSpecific && filtered.length === 0) {
+    throw new Error(`No hero-specific cards were found in pack "${pack.code}" (${pack.name || 'unknown name'}).`);
+  }
   const canonical = canonicalizeByDuplicateCode(filtered);
   const entries = buildDeckEntries(canonical, { includeCodes: Boolean(options.codes) });
 
@@ -72,9 +101,11 @@ function normalizeKind(raw, packCards) {
   const kind = normalizeForSearch(raw);
   if (!kind || kind === 'auto') {
     const counts = countPackKinds(packCards);
-    if (counts.heroKit > 0) return 'hero';
-    if (counts.scenario > 0 && counts.scenario >= counts.player) return 'scenario';
-    if (counts.player > 0) return 'hero';
+    const hasPlayer = counts.heroKit > 0 || counts.player > 0;
+    const hasScenario = counts.scenario > 0 || counts.other > 0;
+    if (hasPlayer && hasScenario) return 'all';
+    if (hasScenario) return 'scenario';
+    if (hasPlayer) return 'hero';
     return 'all';
   }
 
@@ -109,6 +140,20 @@ function filterPackCards(cards, kind) {
   }
 
   return (Array.isArray(cards) ? cards : []).filter(card => allowed.has(normalizeForSearch(card?.type_code || '')));
+}
+
+function filterHeroSpecificPackCards(cards) {
+  return (Array.isArray(cards) ? cards : []).filter(card => {
+    const faction = normalizeForSearch(card?.faction_code || '');
+    if (faction === 'hero') return true;
+
+    const type = normalizeForSearch(card?.type_code || '');
+    if (type === 'obligation') return true;
+
+    const setCode = normalizeForSearch(card?.card_set_code || '');
+    const setName = normalizeForSearch(card?.card_set_name || '');
+    return (setCode && setCode.includes('nemesis')) || (setName && setName.includes('nemesis'));
+  });
 }
 
 function buildPackIndex(cards) {

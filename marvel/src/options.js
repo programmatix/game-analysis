@@ -16,11 +16,12 @@ function parseCliOptions() {
     .option('--cache-dir <dir>', 'Cache directory for downloaded card images', DEFAULT_CACHE_DIR)
     .option('--expected-size <number>', 'Warn when the total card count differs (0 disables)', '0')
     .option('--skip-core', 'Skip cards from the Core Set (pack_code: core)', false)
+    .option('--include-backs', 'Include card backs for duplex printing (adds back pages and flips each row)', false)
     .option('--grid-size <number>', 'Grid size (NxN)', '3')
     .option('--card-width-mm <number>', 'Card width in millimetres', '63.5')
     .option('--card-height-mm <number>', 'Card height in millimetres', '88.9')
     .option('--cut-mark-length-mm <number>', 'Length of cut marks in millimetres', '5')
-    .option('--scale <number>', 'Scale factor for card size (default: 0.99, i.e. 99% for tight sleeves)', '0.99')
+    .option('--scale <number>', 'Scale factor for card size (default: 0.98, i.e. 98% for tight sleeves)', '0.98')
     .option('--face <a|b>', 'Default face for numeric codes like [01001]', 'a')
     .option('--name <text>', 'Deck name for the PDF filename and footer', 'deck')
     .parse(process.argv);
@@ -43,6 +44,7 @@ function parseCliOptions() {
     cacheDir: path.resolve(options.cacheDir),
     expectedDeckSize,
     skipCore: Boolean(options.skipCore),
+    includeBacks: Boolean(options.includeBacks),
     gridSize,
     cardWidthPt,
     cardHeightPt,

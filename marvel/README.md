@@ -1,13 +1,6 @@
 ## Marvel Champions CLI
 
-Tools to parse Marvel Champions deck lists, annotate them with per-card notes, and create printable proxy PDFs. Card metadata and images come from the public MarvelCDB API and are cached locally.
-
-### Setup
-
-- Requires Node.js 18+ (tested with Node 24).
-- From this folder run `npm install` to pull dependencies.
-
-The first run of any command downloads the MarvelCDB card list into `.cache/marvelcdb-cards.json`. Re-run with `--refresh-data` to update it.
+Tools to parse Marvel Champions deck lists, annotate them with per-card notes, and create printable proxy PDFs. Card metadata and images come from the public MarvelCDB API (including encounter/scenario cards) and are cached locally.
 
 ## Decklist format
 
@@ -36,8 +29,9 @@ Useful flags:
 - `--cache-dir` controls where images download (default: `.cache/marvel-card-art`).
 - `--data-cache` controls where the MarvelCDB card JSON is stored (default: `.cache/marvelcdb-cards.json`).
 - `--face a|b` controls the default face for numeric codes like `[01001]` (default: `a`).
+- `--include-backs` adds a second page of backs for double-sided cards and flips each row for duplex alignment.
 - `--skip-core` skips cards whose `pack_code` is `core` (useful if you own only the Core Set).
-- Use `[skipproxy]` or `[skipback]` on a line to omit that card or its back.
+- Use `[skipproxy]` or `[skipback]` on a line to omit that card or its back (the latter only matters with `--include-backs`).
 
 ### Deck annotator
 
@@ -49,14 +43,6 @@ npx marvel-annotate --input decks/sample-deck.txt
 ```
 
 Omit `--output` to overwrite `--input`; when reading from stdin, output is written to stdout.
-
-### Deck parser (resolver)
-
-Resolves a deck list against MarvelCDB and emits a normalized list with explicit codes:
-
-```bash
-npx marvel-parse --input decks/sample-deck.txt --output decks/sample-deck-resolved.txt
-```
 
 ### Deck analyzer
 
@@ -76,7 +62,7 @@ npx marvel-search --type ally --aspect justice --annotate
 npx marvel-search --type ally --aspect justice --cost 2- --annotate
 ```
 
-Supported `--type` codes: `ally`, `alter_ego`, `attachment`, `environment`, `event`, `hero`, `minion`, `obligation`, `player_side_scheme`, `resource`, `side_scheme`, `support`, `treachery`, `upgrade`.
+Supported `--type` codes: `ally`, `alter_ego`, `attachment`, `environment`, `event`, `evidence_means`, `evidence_motive`, `evidence_opportunity`, `hero`, `leader`, `main_scheme`, `minion`, `obligation`, `player_side_scheme`, `resource`, `side_scheme`, `support`, `treachery`, `upgrade`, `villain`.
 
 ### Pack deck lists
 
@@ -84,6 +70,10 @@ Generate a deck list containing all cards from a given Marvel Champions pack (us
 
 ```bash
 npx marvel-pack --list-packs
-npx marvel-pack core --kind hero
-npx marvel-pack "Green Goblin" --kind scenario
+npm exec marvel-pack "bkw" -- --hero-specific > ../../game-decks/marvel/packs/cycle1/bkw.txt  
 ```
+
+`--kind auto` (the default) outputs:
+- `hero` when a pack only has player cards
+- `scenario` when a pack only has encounter cards
+- `all` when a pack contains both

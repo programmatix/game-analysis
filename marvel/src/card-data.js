@@ -5,23 +5,61 @@ const { normalizeCardKey } = require('./decklist');
 
 const DEFAULT_BASE_URL = 'https://marvelcdb.com';
 
+class AmbiguousCardError extends Error {
+  constructor(entry, candidates) {
+    const name = entry?.name || '(unknown)';
+    const exampleCode = candidates?.[0]?.code ? String(candidates[0].code) : '';
+    const details = Array.isArray(candidates)
+      ? candidates
+          .map(
+            card =>
+              `- ${card.code || '(no code)'} — ${card.name || '(no name)'} (${card.pack_name || card.pack_code || 'unknown pack'})`,
+          )
+          .join('\n')
+      : '';
+
+    super(
+      `Card "${name}" is ambiguous. Add a code like "[${exampleCode || 'code'}]" to disambiguate.${details ? `\n${details}` : ''}`,
+    );
+    this.name = 'AmbiguousCardError';
+    this.entry = entry || null;
+    this.candidates = Array.isArray(candidates) ? candidates : [];
+    Error.captureStackTrace?.(this, AmbiguousCardError);
+  }
+}
+
+function cacheIncludesEncounterCards(cards) {
+  for (const card of Array.isArray(cards) ? cards : []) {
+    const type = String(card?.type_code || '').trim().toLowerCase();
+    if (type === 'villain' || type === 'main_scheme') return true;
+  }
+  return false;
+}
+
 async function loadCardDatabase(options = {}) {
   const {
     cachePath = path.join(__dirname, '..', '.cache', 'marvelcdb-cards.json'),
     refresh = false,
     baseUrl = DEFAULT_BASE_URL,
+    includeEncounters = true,
   } = options;
 
   const resolvedCachePath = path.resolve(cachePath);
   if (!refresh) {
     const cached = await readJsonIfExists(resolvedCachePath);
-    if (cached) return cached;
+    if (cached) {
+      if (!includeEncounters) return cached;
+      if (cacheIncludesEncounterCards(cached)) return cached;
+    }
   }
 
   await fs.promises.mkdir(path.dirname(resolvedCachePath), { recursive: true });
 
-  const url = new URL('/api/public/cards/', baseUrl).toString();
-  const response = await fetch(url);
+  const url = new URL('/api/public/cards/', baseUrl);
+  if (includeEncounters) {
+    url.searchParams.set('encounter', '1');
+  }
+  const response = await fetch(url.toString());
   if (!response.ok) {
     throw new Error(`Failed to fetch MarvelCDB cards: ${response.status} ${response.statusText}`);
   }
@@ -213,10 +251,7 @@ function resolveCard(entry, lookup, cardIndex, options = {}) {
       return disambiguated;
     }
 
-    const details = candidates
-      .map(card => `- ${card.code || '(no code)'} — ${card.name || '(no name)'} (${card.pack_name || card.pack_code || 'unknown pack'})`)
-      .join('\n');
-    throw new Error(`Card "${entry.name}" is ambiguous. Add a code like "[${candidates[0].code}]" to disambiguate.\n${details}`);
+    throw new AmbiguousCardError(entry, candidates);
   }
 
   return candidates[0];
@@ -252,6 +287,7 @@ function disambiguateByHint(entry, candidates) {
 function resolveDeckCards(entries, lookup, cardIndex, options = {}) {
   const { attachEntry = false, preservePageBreaks = false, defaultFace = 'a' } = options;
   const cards = [];
+  const ambiguities = [];
 
   for (const entry of Array.isArray(entries) ? entries : []) {
     if (entry?.proxyPageBreak) {
@@ -262,13 +298,82 @@ function resolveDeckCards(entries, lookup, cardIndex, options = {}) {
     }
     if (!entry) continue;
 
-    const card = resolveCard(entry, lookup, cardIndex, { defaultFace });
+    let card;
+    try {
+      card = resolveCard(entry, lookup, cardIndex, { defaultFace });
+    } catch (err) {
+      if (err instanceof AmbiguousCardError) {
+        ambiguities.push(err);
+        continue;
+      }
+      throw err;
+    }
     for (let i = 0; i < (Number(entry.count) || 0); i += 1) {
       cards.push(attachEntry ? { card, entry } : card);
     }
   }
 
+  if (ambiguities.length) {
+    throw new Error(formatAmbiguousDeckError(ambiguities));
+  }
+
   return cards;
+}
+
+function formatAmbiguousDeckError(ambiguities) {
+  const items = (Array.isArray(ambiguities) ? ambiguities : []).map(err => ({
+    name: err?.entry?.name || '(unknown)',
+    count: Number(err?.entry?.count) || 0,
+    source: err?.entry?.source || null,
+    candidates: Array.isArray(err?.candidates) ? err.candidates : [],
+  }));
+
+  items.sort((a, b) => {
+    const fileA = typeof a.source?.file === 'string' ? a.source.file : '';
+    const fileB = typeof b.source?.file === 'string' ? b.source.file : '';
+    if (fileA !== fileB) return fileA.localeCompare(fileB);
+    const lineA = Number(a.source?.line) || 0;
+    const lineB = Number(b.source?.line) || 0;
+    if (lineA !== lineB) return lineA - lineB;
+    return String(a.name).localeCompare(String(b.name));
+  });
+
+  const lines = [
+    `Found ${items.length} ambiguous card reference${items.length === 1 ? '' : 's'}; add a code like "[04013]" to disambiguate:`,
+  ];
+
+  for (const item of items) {
+    const sourceLabel = formatDeckEntrySource(item.source);
+    const countLabel = item.count > 0 ? ` (x${item.count})` : '';
+    lines.push(`- ${item.name}${countLabel}${sourceLabel ? ` — ${sourceLabel}` : ''}`);
+    for (const card of item.candidates) {
+      lines.push(
+        `  - ${card.code || '(no code)'} — ${card.name || '(no name)'} (${card.pack_name || card.pack_code || 'unknown pack'})`,
+      );
+    }
+  }
+
+  return lines.join('\n');
+}
+
+function formatDeckEntrySource(source) {
+  if (!source || typeof source !== 'object') return '';
+  const file = typeof source.file === 'string' ? source.file : '';
+  const line = Number.isInteger(source.line) ? source.line : null;
+  if (!file && line === null) return '';
+
+  let displayFile = file;
+  if (file) {
+    const relative = path.relative(process.cwd(), file);
+    if (relative && !relative.startsWith('..') && !path.isAbsolute(relative)) {
+      displayFile = relative;
+    }
+  }
+
+  if (displayFile && line !== null) return `${displayFile}:${line}`;
+  if (displayFile) return displayFile;
+  if (line !== null) return `line ${line}`;
+  return '';
 }
 
 function dedupeByCode(cards) {
@@ -284,6 +389,7 @@ function dedupeByCode(cards) {
 
 module.exports = {
   DEFAULT_BASE_URL,
+  AmbiguousCardError,
   loadCardDatabase,
   buildCardLookup,
   buildCardCodeIndex,

@@ -112,5 +112,6 @@ module.exports = {
   DEFAULT_BASE_URL,
   resolveImageUrl,
   ensureCardImage,
+  formatCardLabel,
   embedImage,
 };

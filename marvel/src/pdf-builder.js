@@ -20,6 +20,7 @@ async function buildPdf({
   gridSize,
   scaleFactor,
   deckName,
+  includeBacks = false,
   baseUrl,
   cardIndex,
 }) {
@@ -37,8 +38,10 @@ async function buildPdf({
   const imageCache = new Map();
   const paddedCards = applyProxyPageBreaks(cards, cardsPerPage);
   const normalizedCards = paddedCards.map(card => (card ? normalizeDeckCard(card) : null));
-  const cardEntries = normalizedCards.map(deckCard => (deckCard ? resolveCardFaces(deckCard, cardIndex) : null));
-  const pagePlan = buildPagePlan(cardEntries, cardsPerPage);
+  const cardEntries = normalizedCards.map(deckCard =>
+    deckCard ? resolveCardFaces(deckCard, cardIndex, { includeBacks }) : null
+  );
+  const pagePlan = buildPagePlan(cardEntries, cardsPerPage, { includeBacks });
   const totalPages = pagePlan.length || 1;
 
   const layout = computeGridLayout({
@@ -170,10 +173,14 @@ function normalizeDeckCard(cardOrEntry) {
   return { card: cardOrEntry, skipBack: false };
 }
 
-function resolveCardFaces(deckCard, cardIndex) {
+function resolveCardFaces(deckCard, cardIndex, { includeBacks } = {}) {
   const card = deckCard?.card || deckCard;
   const skipBack = Boolean(deckCard?.skipBack);
   const front = { card, imageSrc: card?.imagesrc, face: 'front' };
+
+  if (!includeBacks) {
+    return { front, back: null };
+  }
 
   if (skipBack) {
     return { front, back: null };
@@ -209,7 +216,7 @@ function resolveBackTarget(card, cardIndex) {
   return null;
 }
 
-function buildPagePlan(cardEntries, cardsPerPage) {
+function buildPagePlan(cardEntries, cardsPerPage, { includeBacks } = {}) {
   const pages = [];
   for (let i = 0; i < cardEntries.length; i += cardsPerPage) {
     const slice = cardEntries.slice(i, i + cardsPerPage);
@@ -218,7 +225,7 @@ function buildPagePlan(cardEntries, cardsPerPage) {
       isBack: false,
     });
 
-    if (slice.some(entry => entry && entry.back)) {
+    if (includeBacks && slice.some(entry => entry && entry.back)) {
       const backSlots = fillSlots(slice, cardsPerPage, entry => (entry && entry.back ? { card: entry.back } : null));
       const gridSize = Math.sqrt(cardsPerPage);
       for (let rowStart = 0; rowStart < backSlots.length; rowStart += gridSize) {

@@ -6,7 +6,7 @@ const { parseCliOptions } = require('./options');
 const { normalizeMarvelDeckEntries } = require('./decklist');
 const { loadCardDatabase, buildCardLookup, resolveDeckCards } = require('./card-data');
 const { buildPdf } = require('./pdf-builder');
-const { DEFAULT_BASE_URL } = require('./image-utils');
+const { DEFAULT_BASE_URL, formatCardLabel } = require('./image-utils');
 
 async function main() {
   const options = parseCliOptions();
@@ -17,7 +17,10 @@ async function main() {
   }
 
   const deckBaseDir = options.input ? path.dirname(path.resolve(options.input)) : process.cwd();
-  const parsedEntries = parseDeckList(deckText, { baseDir: deckBaseDir });
+  const parsedEntries = parseDeckList(deckText, {
+    baseDir: deckBaseDir,
+    sourcePath: options.input ? path.resolve(options.input) : '<stdin>',
+  });
   if (!hasCardEntries(parsedEntries)) {
     throw new Error('No valid deck entries were found.');
   }
@@ -67,9 +70,17 @@ async function main() {
     return { card, skipBack: shouldSkipBack(entry) };
   });
 
-  if (!proxyCards.some(entry => entry && entry.card)) {
+  const { proxyCards: readyProxyCards, skippedMissingImages } = filterMissingFrontImages(proxyCards);
+  if (skippedMissingImages.length > 0) {
+    console.warn(formatMissingImageWarning(skippedMissingImages));
+  }
+
+  if (!readyProxyCards.some(entry => entry && entry.card)) {
     if (options.skipCore && skippedCoreCount > 0) {
       throw new Error('All resolved cards were from the Core Set and were skipped due to --skip-core; nothing to proxy.');
+    }
+    if (skippedMissingImages.length > 0) {
+      throw new Error('All resolved cards were skipped due to missing image sources; nothing to proxy.');
     }
     throw new Error('Nothing to proxy after applying filters.');
   }
@@ -77,7 +88,7 @@ async function main() {
   await fs.promises.mkdir(options.cacheDir, { recursive: true });
 
   const pdfBytes = await buildPdf({
-    cards: proxyCards,
+    cards: readyProxyCards,
     cacheDir: options.cacheDir,
     cardWidthPt: options.cardWidthPt,
     cardHeightPt: options.cardHeightPt,
@@ -85,12 +96,63 @@ async function main() {
     gridSize: options.gridSize,
     scaleFactor: options.scaleFactor,
     deckName: options.deckName,
+    includeBacks: options.includeBacks,
     baseUrl: DEFAULT_BASE_URL,
     cardIndex,
   });
 
   await fs.promises.writeFile(options.outputPath, pdfBytes);
   console.log(`Created ${options.outputPath}`);
+}
+
+function filterMissingFrontImages(cards) {
+  const skippedMissingImages = [];
+  const proxyCards = [];
+
+  for (const entry of Array.isArray(cards) ? cards : []) {
+    if (entry?.proxyPageBreak) {
+      proxyCards.push(entry);
+      continue;
+    }
+
+    if (!entry?.card) continue;
+    const src = typeof entry.card.imagesrc === 'string' ? entry.card.imagesrc.trim() : '';
+    if (!src) {
+      skippedMissingImages.push(formatCardLabel(entry.card, 'front'));
+      continue;
+    }
+
+    proxyCards.push(entry);
+  }
+
+  return { proxyCards, skippedMissingImages };
+}
+
+function formatMissingImageWarning(labels) {
+  const counts = new Map();
+  for (const label of labels) {
+    const key = String(label || 'unknown card').trim() || 'unknown card';
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+
+  const entries = [...counts.entries()].sort((a, b) => {
+    if (b[1] !== a[1]) return b[1] - a[1];
+    return a[0].localeCompare(b[0]);
+  });
+
+  const total = labels.length;
+  const lines = [`Warning: skipping ${total} card${total === 1 ? '' : 's'} due to missing image sources:`];
+
+  const maxLines = 50;
+  for (const [label, count] of entries.slice(0, maxLines)) {
+    const message = `Card image source is missing for "${label}".`;
+    lines.push(`- ${message}${count > 1 ? ` (x${count})` : ''}`);
+  }
+  if (entries.length > maxLines) {
+    lines.push(`- ...and ${entries.length - maxLines} more`);
+  }
+
+  return lines.join('\n');
 }
 
 function splitProxyEntries(entries) {

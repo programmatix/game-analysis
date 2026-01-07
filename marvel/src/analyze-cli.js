@@ -26,7 +26,10 @@ async function main() {
   }
 
   const deckBaseDir = options.input ? path.dirname(path.resolve(options.input)) : process.cwd();
-  const parsedEntries = parseDeckList(deckText, { baseDir: deckBaseDir });
+  const parsedEntries = parseDeckList(deckText, {
+    baseDir: deckBaseDir,
+    sourcePath: options.input ? path.resolve(options.input) : '<stdin>',
+  });
   if (!hasCardEntries(parsedEntries)) {
     throw new Error('No valid deck entries were found.');
   }
