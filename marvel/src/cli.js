@@ -70,17 +70,14 @@ async function main() {
     return { card, skipBack: shouldSkipBack(entry) };
   });
 
-  const { proxyCards: readyProxyCards, skippedMissingImages } = filterMissingFrontImages(proxyCards);
-  if (skippedMissingImages.length > 0) {
-    console.warn(formatMissingImageWarning(skippedMissingImages));
+  const missingFrontImages = collectMissingFrontImages(proxyCards);
+  if (missingFrontImages.length > 0) {
+    console.warn(formatMissingImageWarning(missingFrontImages));
   }
 
-  if (!readyProxyCards.some(entry => entry && entry.card)) {
+  if (!proxyCards.some(entry => entry && entry.card)) {
     if (options.skipCore && skippedCoreCount > 0) {
       throw new Error('All resolved cards were from the Core Set and were skipped due to --skip-core; nothing to proxy.');
-    }
-    if (skippedMissingImages.length > 0) {
-      throw new Error('All resolved cards were skipped due to missing image sources; nothing to proxy.');
     }
     throw new Error('Nothing to proxy after applying filters.');
   }
@@ -88,7 +85,7 @@ async function main() {
   await fs.promises.mkdir(options.cacheDir, { recursive: true });
 
   const pdfBytes = await buildPdf({
-    cards: readyProxyCards,
+    cards: proxyCards,
     cacheDir: options.cacheDir,
     cardWidthPt: options.cardWidthPt,
     cardHeightPt: options.cardHeightPt,
@@ -105,27 +102,19 @@ async function main() {
   console.log(`Created ${options.outputPath}`);
 }
 
-function filterMissingFrontImages(cards) {
-  const skippedMissingImages = [];
-  const proxyCards = [];
+function collectMissingFrontImages(cards) {
+  const missing = [];
 
   for (const entry of Array.isArray(cards) ? cards : []) {
-    if (entry?.proxyPageBreak) {
-      proxyCards.push(entry);
-      continue;
-    }
-
+    if (entry?.proxyPageBreak) continue;
     if (!entry?.card) continue;
     const src = typeof entry.card.imagesrc === 'string' ? entry.card.imagesrc.trim() : '';
     if (!src) {
-      skippedMissingImages.push(formatCardLabel(entry.card, 'front'));
-      continue;
+      missing.push(formatCardLabel(entry.card, 'front'));
     }
-
-    proxyCards.push(entry);
   }
 
-  return { proxyCards, skippedMissingImages };
+  return missing;
 }
 
 function formatMissingImageWarning(labels) {
@@ -141,7 +130,7 @@ function formatMissingImageWarning(labels) {
   });
 
   const total = labels.length;
-  const lines = [`Warning: skipping ${total} card${total === 1 ? '' : 's'} due to missing image sources:`];
+  const lines = [`Warning: ${total} card${total === 1 ? '' : 's'} missing image sources; rendering placeholders:`];
 
   const maxLines = 50;
   for (const [label, count] of entries.slice(0, maxLines)) {

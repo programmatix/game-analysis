@@ -80,9 +80,22 @@ async function buildPdf({
         color: backgroundColor,
       });
 
-      const imagePath = await ensureCardImage(slot.card, cacheDir, { baseUrl });
-      const embedded = await embedImage(pdfDoc, imagePath, imageCache);
-      drawCardImage(page, embedded, { x, y, width: scaledWidth, height: scaledHeight });
+      const cardRef = slot.card;
+      const src = (cardRef?.imageSrc || cardRef?.card?.imagesrc || '').trim();
+      if (!src) {
+        drawMissingImagePlaceholder(page, fonts, {
+          x,
+          y,
+          width: scaledWidth,
+          height: scaledHeight,
+          card: cardRef?.card,
+          face: cardRef?.face,
+        });
+      } else {
+        const imagePath = await ensureCardImage(cardRef, cacheDir, { baseUrl });
+        const embedded = await embedImage(pdfDoc, imagePath, imageCache);
+        drawCardImage(page, embedded, { x, y, width: scaledWidth, height: scaledHeight });
+      }
     }
 
     drawCutMarks(page, {
@@ -118,6 +131,7 @@ async function preflightCardImages(pagePlan, cacheDir, options = {}) {
       const card = cardRef.card;
       const face = cardRef.face || '';
       const src = (cardRef.imageSrc || card?.imagesrc || '').trim();
+      if (!src) continue;
       const identity = card?.code != null ? String(card.code).trim() : String(card?.name || '').trim();
       const attemptKey = `${identity}::${face}::${src}`;
       if (attempted.has(attemptKey)) continue;
@@ -270,6 +284,126 @@ function applyProxyPageBreaks(cards, cardsPerPage) {
   }
 
   return output;
+}
+
+function drawMissingImagePlaceholder(page, fonts, { x, y, width, height, card, face }) {
+  const padding = Math.max(4, Math.min(10, width * 0.06));
+  const bgColor = rgb(0.12, 0.12, 0.12);
+  const borderColor = rgb(0.9, 0.9, 0.9);
+  const textColor = rgb(0.95, 0.95, 0.95);
+
+  page.drawRectangle({
+    x,
+    y,
+    width,
+    height,
+    color: bgColor,
+    borderColor,
+    borderWidth: 1,
+  });
+
+  const name = typeof card?.name === 'string' ? card.name.trim() : '';
+  const code = card?.code != null ? String(card.code).trim() : '';
+  const faceLabel = face ? String(face).trim() : '';
+
+  const title = name || code || 'Unknown card';
+  const subtitleParts = [];
+  if (code) subtitleParts.push(code);
+  if (faceLabel) subtitleParts.push(`[${faceLabel}]`);
+  subtitleParts.push('Missing image');
+  const subtitle = subtitleParts.join(' ');
+
+  const maxWidth = width - padding * 2;
+  const titleSize = 14;
+  const subtitleSize = 10;
+  const titleLines = wrapText(fonts.bold, title, titleSize, maxWidth, { maxLines: 3 });
+
+  let cursorY = y + height - padding - titleSize;
+  for (const line of titleLines) {
+    const lineWidth = fonts.bold.widthOfTextAtSize(line, titleSize);
+    page.drawText(line, {
+      x: x + (width - lineWidth) / 2,
+      y: cursorY,
+      size: titleSize,
+      font: fonts.bold,
+      color: textColor,
+    });
+    cursorY -= titleSize + 2;
+  }
+
+  const subtitleWidth = fonts.regular.widthOfTextAtSize(subtitle, subtitleSize);
+  page.drawText(subtitle, {
+    x: x + (width - subtitleWidth) / 2,
+    y: y + padding,
+    size: subtitleSize,
+    font: fonts.regular,
+    color: textColor,
+  });
+}
+
+function wrapText(font, text, fontSize, maxWidth, options = {}) {
+  const maxLines = Number.isInteger(options.maxLines) ? options.maxLines : Infinity;
+  const raw = typeof text === 'string' ? text.trim() : '';
+  if (!raw) return [];
+  if (!font || typeof font.widthOfTextAtSize !== 'function') return [raw];
+
+  const words = raw.split(/\s+/).filter(Boolean);
+  const lines = [];
+  let current = '';
+
+  const pushLine = line => {
+    const trimmed = String(line || '').trim();
+    if (!trimmed) return;
+    lines.push(trimmed);
+  };
+
+  for (const word of words) {
+    const candidate = current ? `${current} ${word}` : word;
+    const width = font.widthOfTextAtSize(candidate, fontSize);
+    if (width <= maxWidth) {
+      current = candidate;
+      continue;
+    }
+
+    if (current) {
+      pushLine(current);
+      current = word;
+    } else {
+      pushLine(truncateText(font, word, fontSize, maxWidth));
+      current = '';
+    }
+
+    if (lines.length >= maxLines) {
+      return lines.slice(0, maxLines);
+    }
+  }
+
+  if (current && lines.length < maxLines) {
+    pushLine(current);
+  }
+
+  if (lines.length > maxLines) {
+    return lines.slice(0, maxLines);
+  }
+
+  return lines;
+}
+
+function truncateText(font, text, fontSize, maxWidth) {
+  const raw = typeof text === 'string' ? text : String(text);
+  if (!raw) return '';
+  if (font.widthOfTextAtSize(raw, fontSize) <= maxWidth) return raw;
+
+  const ellipsis = '…';
+  let end = raw.length;
+  while (end > 0) {
+    const candidate = `${raw.slice(0, end)}${ellipsis}`;
+    if (font.widthOfTextAtSize(candidate, fontSize) <= maxWidth) {
+      return candidate;
+    }
+    end -= 1;
+  }
+  return ellipsis;
 }
 
 function fillSlots(entries, size, mapFn) {
