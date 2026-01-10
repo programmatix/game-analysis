@@ -2,7 +2,9 @@
 
 Tools to parse Star Wars: Unlimited deck lists, annotate them with per-card notes, analyze them, search the card database, and create printable proxy PDFs.
 
-Card metadata and image URLs currently come from the `swu-database` npm package (Spark of Rebellion / `SOR` set). You can also load additional cards via `--data-file` in each CLI.
+Card metadata and image URLs come from `erlloyd/star-wars-unlimited-json` (cached to `swu/.cache/swu-card-db`). You can also load additional cards via `--data-file` in each CLI.
+
+To force a fresh download of the cached database, run with `SWU_DB_REFRESH=1`.
 
 ## Install (repo)
 

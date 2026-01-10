@@ -16,7 +16,6 @@
   },
   "dependencies": {
     "commander": "^14.0.2",
-    "pdf-lib": "^1.17.1",
-    "swu-database": "^1.1.1"
+    "pdf-lib": "^1.17.1"
   }
 }

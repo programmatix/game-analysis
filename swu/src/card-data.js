@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const https = require('https');
 const { normalizeName } = require('../../shared/deck-utils');
 
 class AmbiguousCardError extends Error {
@@ -24,35 +25,100 @@ async function loadCardDatabase(options = {}) {
   const {
     dataFile = null,
     includeSets = null,
+    cacheDir = DEFAULT_DB_CACHE_DIR,
+    maxAgeMs = resolveDefaultMaxAgeMs(),
   } = options;
 
-  const baseCards = loadFromSwuDatabase(includeSets);
+  const baseCards = await loadFromRemoteDatabase(includeSets, { cacheDir, maxAgeMs });
   const extraCards = dataFile ? await loadFromFile(dataFile) : [];
   return normalizeCards([...baseCards, ...extraCards]);
 }
 
-function loadFromSwuDatabase(includeSets) {
-  let swuDatabase;
-  try {
-    swuDatabase = require('swu-database');
-  } catch (err) {
-    throw new Error(`Unable to load swu-database (run "npm install" in swu/): ${err instanceof Error ? err.message : String(err)}`);
+const DEFAULT_DB_CACHE_DIR = path.resolve(__dirname, '..', '.cache', 'swu-card-db');
+const DEFAULT_DB_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+const SWU_JSON_SET_SOURCES = [
+  {
+    set: 'SOR',
+    url: 'https://raw.githubusercontent.com/erlloyd/star-wars-unlimited-json/main/sets/Spark%20of%20Rebellion.json',
+  },
+  {
+    set: 'SHD',
+    url: 'https://raw.githubusercontent.com/erlloyd/star-wars-unlimited-json/main/sets/Shadows%20of%20the%20Galaxy.json',
+  },
+  {
+    set: 'JTL',
+    url: 'https://raw.githubusercontent.com/erlloyd/star-wars-unlimited-json/main/sets/Jump%20to%20Lightspeed.json',
+  },
+  {
+    set: 'TWI',
+    url: 'https://raw.githubusercontent.com/erlloyd/star-wars-unlimited-json/main/sets/Twilight%20of%20the%20Republic.json',
+  },
+];
+
+function resolveDefaultMaxAgeMs() {
+  if (isTruthyEnv('SWU_DB_REFRESH')) return 0;
+
+  const rawDays = process.env.SWU_DB_MAX_AGE_DAYS;
+  if (rawDays !== undefined) {
+    const days = Number(rawDays);
+    if (Number.isFinite(days) && days >= 0) return days * 24 * 60 * 60 * 1000;
   }
 
-  const sets = [];
+  return DEFAULT_DB_MAX_AGE_MS;
+}
+
+function isTruthyEnv(name) {
+  const raw = process.env[name];
+  if (raw === undefined) return false;
+  const normalized = String(raw).trim().toLowerCase();
+  return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'y';
+}
+
+async function loadFromRemoteDatabase(includeSets, { cacheDir, maxAgeMs }) {
   const requested = Array.isArray(includeSets) && includeSets.length
     ? new Set(includeSets.map(value => String(value || '').trim().toUpperCase()).filter(Boolean))
     : null;
 
-  for (const [key, value] of Object.entries(swuDatabase)) {
-    const setCode = String(key || '').trim().toUpperCase();
-    if (requested && !requested.has(setCode)) continue;
-    if (Array.isArray(value)) {
-      sets.push(...value);
-    }
+  const sources = requested
+    ? SWU_JSON_SET_SOURCES.filter(source => requested.has(source.set))
+    : SWU_JSON_SET_SOURCES;
+
+  if (!sources.length) {
+    throw new Error(
+      requested
+        ? `No SWU card data sources matched the requested set(s): ${Array.from(requested).join(', ')}`
+        : 'No SWU card data sources are configured.'
+    );
   }
 
-  return sets;
+  await fs.promises.mkdir(cacheDir, { recursive: true });
+  const out = [];
+
+  for (const source of sources) {
+    const cachePath = path.join(cacheDir, `${source.set}.json`);
+    const jsonText = await readCachedOrDownload({
+      url: source.url,
+      cachePath,
+      maxAgeMs,
+      label: source.set,
+    });
+
+    let parsed;
+    try {
+      parsed = JSON.parse(jsonText);
+    } catch (err) {
+      throw new Error(`Unable to parse cached SWU card data for ${source.set} (${cachePath}). Delete it and retry.`);
+    }
+
+    if (!Array.isArray(parsed)) {
+      throw new Error(`Unexpected SWU card data shape for ${source.set}; expected a JSON array (${cachePath}).`);
+    }
+
+    out.push(...parsed);
+  }
+
+  return out;
 }
 
 async function loadFromFile(filePath) {
@@ -78,9 +144,9 @@ function normalizeRawCard(raw) {
   if (!raw || typeof raw !== 'object') return null;
 
   const set = normalizeSetCode(raw.Set || raw.set);
-  const number = normalizeCardNumber(raw['#'] ?? raw.number ?? raw.no);
-  const name = stringOrEmpty(raw['Card Name'] ?? raw.name);
-  const title = stringOrEmpty(raw.Title ?? raw.title);
+  const number = normalizeCardNumber(raw['#'] ?? raw.Number ?? raw.number ?? raw.no);
+  const name = stringOrEmpty(raw['Card Name'] ?? raw.Name ?? raw.name);
+  const title = stringOrEmpty(raw.Title ?? raw.Subtitle ?? raw.title);
   const type = normalizeType(raw.Type ?? raw.type ?? raw.cardType);
 
   if (!set || number === null || (!name && !title)) {
@@ -93,13 +159,14 @@ function normalizeRawCard(raw) {
 
   const traits = normalizeTraits(raw);
   const rarity = stringOrEmpty(raw.Rarity ?? raw.rarity).toUpperCase();
-  const arena = normalizeArena(raw.Arena ?? raw.arena);
+  const arena = normalizeArena(raw.Arena ?? raw.Arenas ?? raw.arena);
 
   const images = {
-    front: stringOrEmpty(raw['Image Url Front'] ?? raw.imageUrlFront ?? raw.image_front ?? raw.image?.url),
+    front: stringOrEmpty(raw['Image Url Front'] ?? raw.FrontArt ?? raw.imageUrlFront ?? raw.image_front ?? raw.image?.url),
     back: stringOrEmpty(
       raw['Image Url back']
         ?? raw['Image Url Back']
+        ?? raw.BackArt
         ?? raw.imageUrlBack
         ?? raw.image_back
         ?? raw.imageBackside?.url
@@ -122,8 +189,8 @@ function normalizeRawCard(raw) {
     power: normalizeNumber(raw.Power ?? raw.power),
     hp: normalizeNumber(raw.HP ?? raw.hp),
     traits,
-    textFront: stringOrEmpty(raw['Front Text'] ?? raw.textFront ?? raw.front_text ?? raw.frontText),
-    textBack: stringOrEmpty(raw['Back Text'] ?? raw.textBack ?? raw.back_text ?? raw.backText),
+    textFront: formatRulesText(raw),
+    textBack: stringOrEmpty(raw['Back Text'] ?? raw.BackText ?? raw.textBack ?? raw.back_text ?? raw.backText),
     doubleSided: raw.DoubleSided === true || raw.doubleSided === true || normalizeName(raw.DoubleSided) === 'true',
     images,
     landscape: {
@@ -136,6 +203,15 @@ function normalizeRawCard(raw) {
     },
     raw,
   };
+}
+
+function formatRulesText(raw) {
+  const parts = [];
+  const frontText = stringOrEmpty(raw['Front Text'] ?? raw.FrontText ?? raw.textFront ?? raw.front_text ?? raw.frontText);
+  if (frontText) parts.push(frontText);
+  const epicAction = stringOrEmpty(raw.EpicAction ?? raw.epicAction);
+  if (epicAction) parts.push(epicAction);
+  return parts.join('\n').trim();
 }
 
 function buildCardLookup(cards) {
@@ -407,6 +483,14 @@ function normalizeType(value) {
 }
 
 function normalizeArena(value) {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const normalized = normalizeArena(item);
+      if (normalized) return normalized;
+    }
+    return null;
+  }
+
   const raw = typeof value === 'string' ? value.trim().toLowerCase() : '';
   if (!raw) return null;
   return raw;
@@ -419,6 +503,11 @@ function normalizeAspect(value) {
 }
 
 function normalizeAspects(raw) {
+  const fromSwuJson = Array.isArray(raw?.Aspects) ? raw.Aspects : null;
+  if (fromSwuJson) {
+    return fromSwuJson.map(value => normalizeAspect(value)).filter(Boolean);
+  }
+
   const fromArray = Array.isArray(raw?.aspects) ? raw.aspects : null;
   if (fromArray) {
     return fromArray.map(value => normalizeAspect(value)).filter(Boolean);
@@ -431,6 +520,9 @@ function normalizeAspects(raw) {
 }
 
 function normalizeTraits(raw) {
+  if (Array.isArray(raw?.Traits)) {
+    return raw.Traits.map(value => stringOrEmpty(value)).filter(Boolean);
+  }
   if (Array.isArray(raw?.traits)) {
     return raw.traits.map(value => stringOrEmpty(value)).filter(Boolean);
   }
@@ -468,6 +560,77 @@ function collectTraits(raw) {
     if (trait) traits.push(trait);
   }
   return traits;
+}
+
+async function readCachedOrDownload({ url, cachePath, maxAgeMs, label }) {
+  const maxAge = Number.isFinite(maxAgeMs) && maxAgeMs >= 0 ? maxAgeMs : DEFAULT_DB_MAX_AGE_MS;
+  const cached = await readCacheFile(cachePath, maxAge);
+  if (cached !== null) return cached;
+
+  try {
+    const fetched = await fetchText(url);
+    await writeCacheFile(cachePath, fetched);
+    return fetched;
+  } catch (err) {
+    const fallback = await readCacheFile(cachePath, Number.POSITIVE_INFINITY);
+    if (fallback !== null) {
+      console.warn(`Warning: unable to refresh SWU card data for ${label}; using cached copy (${cachePath}).`);
+      return fallback;
+    }
+    throw new Error(`Unable to download SWU card data for ${label}: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+async function readCacheFile(cachePath, maxAgeMs) {
+  try {
+    const stat = await fs.promises.stat(cachePath);
+    if (Number.isFinite(maxAgeMs) && maxAgeMs !== Number.POSITIVE_INFINITY) {
+      const ageMs = Date.now() - stat.mtimeMs;
+      if (ageMs > maxAgeMs) return null;
+    }
+    return await fs.promises.readFile(cachePath, 'utf8');
+  } catch (_) {
+    return null;
+  }
+}
+
+async function writeCacheFile(cachePath, text) {
+  const tmpPath = `${cachePath}.${process.pid}.tmp`;
+  await fs.promises.writeFile(tmpPath, text);
+  await fs.promises.rename(tmpPath, cachePath);
+}
+
+function fetchText(url) {
+  return new Promise((resolve, reject) => {
+    const request = https.get(
+      url,
+      { headers: { 'User-Agent': 'lorcana-swu-tools' } },
+      response => {
+        const status = response.statusCode || 0;
+        const location = response.headers.location;
+        if (status >= 300 && status < 400 && location) {
+          const redirect = new URL(location, url).toString();
+          response.resume();
+          fetchText(redirect).then(resolve, reject);
+          return;
+        }
+
+        if (status !== 200) {
+          response.resume();
+          reject(new Error(`HTTP ${status}`));
+          return;
+        }
+
+        response.setEncoding('utf8');
+        let data = '';
+        response.on('data', chunk => {
+          data += chunk;
+        });
+        response.on('end', () => resolve(data));
+      }
+    );
+    request.on('error', reject);
+  });
 }
 
 module.exports = {

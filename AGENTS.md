@@ -11,6 +11,11 @@ A standard suite of tools will usually consist of:
 - A CLI tool to search the database.  See `npx marvel-search` as an example.
 - A CLI tool to generate a proxy PDF from a decklist.
 - Not always needed, but a CLI tool to generate a decklist from a pack.  See `npx marvel-pack` as an example.
+- Support pipeline for ``npx marvel-pack 'some-pack' > npx marvel-proxy`
+
+General rules:
+
 - Everything should go under a subfolder for this game `subfolder/`.  But generic utility code should go in the `shared` directory.
 - Cached files should go in `subfolder/.cache/`.
 - Create a README.md file in the subfolder with brief instructions for the tools.  Keep it concise.
+- Tools should surface all problems with a decklist, rather than failing on the first problem 
