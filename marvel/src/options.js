@@ -4,6 +4,7 @@ const { mmToPt } = require('../../shared/pdf-layout');
 const { resolveNameAndOutput } = require('../../shared/deck-utils');
 
 const DEFAULT_CACHE_DIR = path.join('.cache', 'marvel-card-art');
+const DEFAULT_FALLBACK_IMAGE_BASE_URL = 'https://db.merlindumesnil.net';
 
 function parseCliOptions() {
   const program = new Command();
@@ -17,11 +18,16 @@ function parseCliOptions() {
     .option('--expected-size <number>', 'Warn when the total card count differs (0 disables)', '0')
     .option('--skip-core', 'Skip cards from the Core Set (pack_code: core)', false)
     .option('--include-backs', 'Include card backs for duplex printing (adds back pages and flips each row)', false)
+    .option(
+      '--fallback-image-base-url <url>',
+      'Fallback base URL for card images when MarvelCDB has no imagesrc',
+      DEFAULT_FALLBACK_IMAGE_BASE_URL,
+    )
     .option('--grid-size <number>', 'Grid size (NxN)', '3')
     .option('--card-width-mm <number>', 'Card width in millimetres', '63.5')
     .option('--card-height-mm <number>', 'Card height in millimetres', '88.9')
     .option('--cut-mark-length-mm <number>', 'Length of cut marks in millimetres', '5')
-    .option('--scale <number>', 'Scale factor for card size (default: 0.98, i.e. 98% for tight sleeves)', '0.98')
+    .option('--scale <number>', 'Scale factor for card size (default: 0.97, i.e. 98% for tight sleeves)', '0.97')
     .option('--face <a|b>', 'Default face for numeric codes like [01001]', 'a')
     .option('--name <text>', 'Deck name for the PDF filename and footer', 'deck')
     .parse(process.argv);
@@ -53,6 +59,7 @@ function parseCliOptions() {
     face,
     deckName,
     outputPath,
+    fallbackImageBaseUrl: String(options.fallbackImageBaseUrl || DEFAULT_FALLBACK_IMAGE_BASE_URL).trim(),
   };
 }
 

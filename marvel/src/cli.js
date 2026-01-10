@@ -6,7 +6,7 @@ const { parseCliOptions } = require('./options');
 const { normalizeMarvelDeckEntries } = require('./decklist');
 const { loadCardDatabase, buildCardLookup, resolveDeckCards } = require('./card-data');
 const { buildPdf } = require('./pdf-builder');
-const { DEFAULT_BASE_URL, formatCardLabel } = require('./image-utils');
+const { DEFAULT_BASE_URL, formatCardLabel, resolveCardImageSource } = require('./image-utils');
 
 async function main() {
   const options = parseCliOptions();
@@ -70,7 +70,10 @@ async function main() {
     return { card, skipBack: shouldSkipBack(entry) };
   });
 
-  const missingFrontImages = collectMissingFrontImages(proxyCards);
+  const missingFrontImages = await collectMissingFrontImages(proxyCards, {
+    baseUrl: DEFAULT_BASE_URL,
+    fallbackImageBaseUrl: options.fallbackImageBaseUrl,
+  });
   if (missingFrontImages.length > 0) {
     console.warn(formatMissingImageWarning(missingFrontImages));
   }
@@ -95,6 +98,7 @@ async function main() {
     deckName: options.deckName,
     includeBacks: options.includeBacks,
     baseUrl: DEFAULT_BASE_URL,
+    fallbackImageBaseUrl: options.fallbackImageBaseUrl,
     cardIndex,
   });
 
@@ -102,14 +106,14 @@ async function main() {
   console.log(`Created ${options.outputPath}`);
 }
 
-function collectMissingFrontImages(cards) {
+async function collectMissingFrontImages(cards, options = {}) {
   const missing = [];
 
   for (const entry of Array.isArray(cards) ? cards : []) {
     if (entry?.proxyPageBreak) continue;
     if (!entry?.card) continue;
-    const src = typeof entry.card.imagesrc === 'string' ? entry.card.imagesrc.trim() : '';
-    if (!src) {
+    const resolved = await resolveCardImageSource({ card: entry.card, face: 'front' }, options);
+    if (!resolved) {
       missing.push(formatCardLabel(entry.card, 'front'));
     }
   }

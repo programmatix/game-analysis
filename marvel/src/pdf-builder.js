@@ -9,7 +9,7 @@ const {
   drawRulers,
   drawPageLabel,
 } = require('../../shared/pdf-layout');
-const { ensureCardImage, embedImage } = require('./image-utils');
+const { ensureCardImage, embedImage, MissingCardImageSourceError } = require('./image-utils');
 
 async function buildPdf({
   cards,
@@ -22,6 +22,7 @@ async function buildPdf({
   deckName,
   includeBacks = false,
   baseUrl,
+  fallbackImageBaseUrl,
   cardIndex,
 }) {
   const pdfDoc = await PDFDocument.create();
@@ -54,7 +55,7 @@ async function buildPdf({
     pageHeight: A4_HEIGHT_PT,
   });
 
-  await preflightCardImages(pagePlan, cacheDir, { baseUrl });
+  await preflightCardImages(pagePlan, cacheDir, { baseUrl, fallbackImageBaseUrl });
 
   for (let pageIndex = 0; pageIndex < pagePlan.length; pageIndex += 1) {
     const pageConfig = pagePlan[pageIndex];
@@ -81,20 +82,23 @@ async function buildPdf({
       });
 
       const cardRef = slot.card;
-      const src = (cardRef?.imageSrc || cardRef?.card?.imagesrc || '').trim();
-      if (!src) {
-        drawMissingImagePlaceholder(page, fonts, {
-          x,
-          y,
-          width: scaledWidth,
-          height: scaledHeight,
-          card: cardRef?.card,
-          face: cardRef?.face,
-        });
-      } else {
-        const imagePath = await ensureCardImage(cardRef, cacheDir, { baseUrl });
+      try {
+        const imagePath = await ensureCardImage(cardRef, cacheDir, { baseUrl, fallbackImageBaseUrl });
         const embedded = await embedImage(pdfDoc, imagePath, imageCache);
         drawCardImage(page, embedded, { x, y, width: scaledWidth, height: scaledHeight });
+      } catch (err) {
+        if (err instanceof MissingCardImageSourceError) {
+          drawMissingImagePlaceholder(page, fonts, {
+            x,
+            y,
+            width: scaledWidth,
+            height: scaledHeight,
+            card: cardRef?.card,
+            face: cardRef?.face,
+          });
+          continue;
+        }
+        throw err;
       }
     }
 
@@ -120,6 +124,7 @@ async function buildPdf({
 
 async function preflightCardImages(pagePlan, cacheDir, options = {}) {
   const baseUrl = options.baseUrl;
+  const fallbackImageBaseUrl = options.fallbackImageBaseUrl;
   const attempted = new Set();
   const failures = [];
 
@@ -131,15 +136,17 @@ async function preflightCardImages(pagePlan, cacheDir, options = {}) {
       const card = cardRef.card;
       const face = cardRef.face || '';
       const src = (cardRef.imageSrc || card?.imagesrc || '').trim();
-      if (!src) continue;
       const identity = card?.code != null ? String(card.code).trim() : String(card?.name || '').trim();
       const attemptKey = `${identity}::${face}::${src}`;
       if (attempted.has(attemptKey)) continue;
       attempted.add(attemptKey);
 
       try {
-        await ensureCardImage(cardRef, cacheDir, { baseUrl });
+        await ensureCardImage(cardRef, cacheDir, { baseUrl, fallbackImageBaseUrl });
       } catch (err) {
+        if (err instanceof MissingCardImageSourceError) {
+          continue;
+        }
         const message = err instanceof Error ? err.message : String(err);
         failures.push(message);
       }
