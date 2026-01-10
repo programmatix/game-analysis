@@ -70,7 +70,7 @@ Generate a deck list containing all cards from a given Marvel Champions pack (us
 
 ```bash
 npx marvel-pack --list-packs
-npm exec marvel-pack "bkw" -- --hero-specific > ../../game-decks/marvel/packs/cycle1/bkw.txt  
+npx marvel-pack "bkw" -- --hero-specific > ../../game-decks/marvel/packs/cycle1/bkw.txt  
 ```
 
 `--kind auto` (the default) outputs:
