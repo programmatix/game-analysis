@@ -1,0 +1,22 @@
+{
+  "name": "swu-proxy",
+  "version": "1.0.0",
+  "description": "CLI tools to parse Star Wars: Unlimited decklists, annotate them, analyze them, search the card database, and generate printable proxy PDFs.",
+  "bin": {
+    "swu-proxy": "src/cli.js",
+    "swu-annotate": "src/annotate-cli.js",
+    "swu-parse": "src/parse-cli.js",
+    "swu-search": "src/search-cli.js",
+    "swu-analyze": "src/analyze-cli.js",
+    "swu-pack": "src/pack-cli.js"
+  },
+  "type": "commonjs",
+  "scripts": {
+    "test": "echo \"No tests defined\" && exit 0"
+  },
+  "dependencies": {
+    "commander": "^14.0.2",
+    "pdf-lib": "^1.17.1",
+    "swu-database": "^1.1.1"
+  }
+}
