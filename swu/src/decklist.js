@@ -73,7 +73,7 @@ function parseSwuDeckList(text, options = {}) {
 
 function parseSwuDeckLine(text, options = {}) {
   const section = options.section || 'other';
-  const match = /^(\d+)\s*(?:x|×)\s+(.+)$/.exec(text) || /^(\d+)\s+(.+)$/.exec(text);
+  const match = /^(\d+)\s*(?:x|×)\s*(.+)$/.exec(text) || /^(\d+)\s+(.+)$/.exec(text);
 
   if (match) {
     const [, countStr, rawName] = match;
@@ -81,16 +81,24 @@ function parseSwuDeckLine(text, options = {}) {
     if (!Number.isFinite(count) || count <= 0) return null;
     const { name, code, annotations } = parseNameWithCode(rawName);
     if (!name) return null;
-    const entry = { count, name, code };
-    if (annotations && Object.keys(annotations).length > 0) entry.annotations = annotations;
+    const extractedSwuCode = extractSwuDeckCode(rawName);
+    const inferredSwuCode = extractSwuDeckCode(name);
+    const resolvedCode = code || extractedSwuCode || inferredSwuCode;
+    const entry = { count, name, code: resolvedCode || code };
+    const cleanedAnnotations = stripSwuCodeFromAnnotations(annotations, resolvedCode);
+    if (cleanedAnnotations && Object.keys(cleanedAnnotations).length > 0) entry.annotations = cleanedAnnotations;
     return entry;
   }
 
   if (section === 'leader' || section === 'base') {
     const { name, code, annotations } = parseNameWithCode(text);
     if (!name) return null;
-    const entry = { count: 1, name, code };
-    if (annotations && Object.keys(annotations).length > 0) entry.annotations = annotations;
+    const extractedSwuCode = extractSwuDeckCode(text);
+    const inferredSwuCode = extractSwuDeckCode(name);
+    const resolvedCode = code || extractedSwuCode || inferredSwuCode;
+    const entry = { count: 1, name, code: resolvedCode || code };
+    const cleanedAnnotations = stripSwuCodeFromAnnotations(annotations, resolvedCode);
+    if (cleanedAnnotations && Object.keys(cleanedAnnotations).length > 0) entry.annotations = cleanedAnnotations;
     return entry;
   }
 
@@ -137,6 +145,64 @@ function parseSetNumberHint(text) {
 
 function stripBlockComments(text) {
   return String(text || '').replace(/\/\*[\s\S]*?\*\//g, '');
+}
+
+function stripSwuCodeFromAnnotations(annotations, code) {
+  const keywords = Array.isArray(annotations?.keywords) ? annotations.keywords : null;
+  if (!keywords || !keywords.length) return annotations;
+
+  const normalizedCode = normalizeSwuCodeToken(code);
+  if (!normalizedCode) return annotations;
+
+  const filtered = keywords.filter(keyword => normalizeSwuCodeToken(keyword) !== normalizedCode);
+  if (filtered.length === keywords.length) return annotations;
+
+  const next = { ...(annotations || {}) };
+  if (filtered.length) next.keywords = filtered;
+  else delete next.keywords;
+  return next;
+}
+
+function normalizeSwuCodeToken(value) {
+  const raw = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  if (!raw) return '';
+  return raw.replace(/\s+/g, '').replace(/_/g, '-');
+}
+
+function extractSwuDeckCode(text) {
+  const raw = typeof text === 'string' ? text.trim() : '';
+  if (!raw) return null;
+
+  for (const token of extractBracketTokens(raw)) {
+    const code = parseSwuSetNumberCode(token);
+    if (code) return code;
+  }
+
+  return parseSwuSetNumberCode(raw);
+}
+
+function extractBracketTokens(text) {
+  const tokens = [];
+  const regex = /\[([^\]]+)\]/g;
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    const value = String(match[1] || '').trim();
+    if (value) tokens.push(value);
+  }
+  return tokens;
+}
+
+function parseSwuSetNumberCode(text) {
+  const raw = typeof text === 'string' ? text.trim().toUpperCase() : '';
+  if (!raw) return null;
+
+  const match = /^([A-Z]{3,5})[_-](\d{1,3})$/.exec(raw);
+  if (!match) return null;
+
+  const [, set, numberText] = match;
+  const number = Number(numberText);
+  if (!Number.isFinite(number) || number <= 0 || number > 999) return null;
+  return `${set}-${String(number).padStart(3, '0')}`;
 }
 
 function resolveIncludePath(target, baseDir) {

@@ -19,7 +19,10 @@ Supported card line formats:
 3 Battlefield Marine
 3x TIE/ln Fighter
 1 Luke Skywalker, Faithful Friend [SOR-005]
+3xSOR_193
 ```
+
+Set/number codes accept either `SET-###` (in brackets) or `SET_###` (as the whole card reference).
 
 Section headers from common exports are supported:
 
