@@ -64,6 +64,14 @@ npx marvel-search --type ally --aspect justice --cost 2- --annotate
 
 Supported `--type` codes: `ally`, `alter_ego`, `attachment`, `environment`, `event`, `evidence_means`, `evidence_motive`, `evidence_opportunity`, `hero`, `leader`, `main_scheme`, `minion`, `obligation`, `player_side_scheme`, `resource`, `side_scheme`, `support`, `treachery`, `upgrade`, `villain`.
 
+### Download decklists from MarvelCDB
+
+Download a published decklist (by id or URL) and emit a normalized list in this repo’s deck format (one card per line, with `[code]` tags). The hero + linked alter-ego are included as `[ignoreForDeckLimit]` entries:
+
+```bash
+npx marvel-download 40979 | npx marvel-proxy
+```
+
 ### Pack deck lists
 
 Generate a deck list containing all cards from a given Marvel Champions pack (useful for proxying a hero/scenario pack):

@@ -8,7 +8,8 @@
     "marvel-parse": "src/parse-cli.js",
     "marvel-search": "src/search-cli.js",
     "marvel-analyze": "src/analyze-cli.js",
-    "marvel-pack": "src/pack-cli.js"
+    "marvel-pack": "src/pack-cli.js",
+    "marvel-download": "src/download-cli.js"
   },
   "type": "commonjs",
   "scripts": {
