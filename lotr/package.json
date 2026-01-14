@@ -1,0 +1,22 @@
+{
+  "name": "lotr-proxy",
+  "version": "1.0.0",
+  "description": "CLI tools to parse The Lord of the Rings: The Card Game deck lists, annotate them, and render printable proxy PDFs.",
+  "bin": {
+    "lotr-proxy": "src/cli.js",
+    "lotr-annotate": "src/annotate-cli.js",
+    "lotr-parse": "src/parse-cli.js",
+    "lotr-search": "src/search-cli.js",
+    "lotr-analyze": "src/analyze-cli.js",
+    "lotr-download": "src/download-cli.js"
+  },
+  "type": "commonjs",
+  "scripts": {
+    "test": "echo \"No tests defined\" && exit 0"
+  },
+  "dependencies": {
+    "commander": "^14.0.2",
+    "pdf-lib": "^1.17.1"
+  }
+}
+
