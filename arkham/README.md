@@ -62,6 +62,8 @@ Compute draw odds that respect Arkham opening-hand weakness redraws:
 npx arkham-odds --deck-size 33 --weaknesses 2 --target-copies 2 --opening-hand 5 --next-draws 10
 ```
 
+Output includes cumulative odds for hitting 1+ and 2+ copies by each draw step.
+
 ### Hand sampler
 
 Sample 10,000 opening hands and early draws, counting weapons plus resource/draw potential (starts at 5 resources and +1 per draw):

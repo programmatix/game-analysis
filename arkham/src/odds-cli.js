@@ -24,6 +24,29 @@ function probabilityNoHits(population, successes, draws) {
   return combination(population - successes, draws) / combination(population, draws);
 }
 
+function hypergeometricProbability(population, successes, draws, hits) {
+  if (draws < 0 || draws > population) return 0;
+  if (hits < 0 || hits > draws) return 0;
+  if (hits > successes) return 0;
+  const denom = combination(population, draws);
+  if (denom === 0) return 0;
+  return (
+    (combination(successes, hits) * combination(population - successes, draws - hits)) / denom
+  );
+}
+
+function probabilityAtLeast(population, successes, draws, minHits) {
+  if (minHits <= 0) return 1;
+  const maxHits = Math.min(successes, draws);
+  if (minHits > maxHits) return 0;
+
+  let probability = 0;
+  for (let hits = minHits; hits <= maxHits; hits += 1) {
+    probability += hypergeometricProbability(population, successes, draws, hits);
+  }
+  return probability;
+}
+
 function openingDistribution({ deckSize, weaknesses, targetCopies, openingHand }) {
   const nonWeakDeck = deckSize - weaknesses;
   const denom = combination(nonWeakDeck, openingHand);
@@ -80,17 +103,25 @@ function main() {
     openingHand,
   });
 
-  const cumulativeAfterDraws = draws => {
+  const openingTwoPlusChance = distribution.reduce(
+    (sum, { hits, probability }) => sum + (hits >= 2 ? probability : 0),
+    0,
+  );
+
+  const cumulativeAtLeastByThisPoint = (draws, minHits) => {
+    if (minHits <= 0) return 1;
+    if (minHits > targetCopies) return 0;
+
     const remainingDeck = deckSize - openingHand;
     let probability = 0;
 
-    distribution.forEach(({ hits, probability: weight }) => {
-      const remainingTargets = targetCopies - hits;
-      if (hits > 0) {
-        probability += weight; // already hit in opening hand
+    distribution.forEach(({ hits: openingHits, probability: weight }) => {
+      const remainingTargets = targetCopies - openingHits;
+      const neededFromDraws = minHits - openingHits;
+      if (neededFromDraws <= 0) {
+        probability += weight;
       } else {
-        const missChance = probabilityNoHits(remainingDeck, remainingTargets, draws);
-        probability += weight * (1 - missChance);
+        probability += weight * probabilityAtLeast(remainingDeck, remainingTargets, draws, neededFromDraws);
       }
     });
 
@@ -110,11 +141,12 @@ function main() {
   console.log(`Opening hand: ${openingHand} kept cards (models auto discarding weaknesses)`);
   console.log(`Next draws: ${nextDraws}`);
   console.log('');
-  console.log('Step\t\tP(hit by this point)');
-  console.log(`Opening hand\t${pct(openingHitChance)}%`);
+  console.log('Step\t\tP(1+ hit)\tP(2+ hits)');
+  console.log(`Opening hand\t${pct(openingHitChance)}%\t\t${pct(openingTwoPlusChance)}%`);
   for (let i = 1; i <= nextDraws; i += 1) {
-    const cumulative = cumulativeAfterDraws(i);
-    console.log(`Draw ${i}\t\t${pct(cumulative)}%`);
+    const onePlus = cumulativeAtLeastByThisPoint(i, 1);
+    const twoPlus = cumulativeAtLeastByThisPoint(i, 2);
+    console.log(`Draw ${i}\t\t${pct(onePlus)}%\t\t${pct(twoPlus)}%`);
   }
   console.log('');
   console.log(`P(hit in next ${nextDraws} given miss in opening): ${pct(conditionalNextIfMiss)}%`);
