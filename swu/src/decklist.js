@@ -4,6 +4,10 @@ const { parseNameWithCode, stripLineComment } = require('../../shared/deck-utils
 
 function parseSwuDeckList(text, options = {}) {
   const { baseDir = process.cwd(), sourcePath = null, initialSection = 'other', _includeStack = [] } = options;
+
+  const maybeJsonEntries = parseSwuDckJsonDeck(text, { sourcePath });
+  if (maybeJsonEntries) return maybeJsonEntries;
+
   const sanitizedText = stripBlockComments(text || '');
   const lines = sanitizedText.split(/\r?\n/);
   const entries = [];
@@ -69,6 +73,135 @@ function parseSwuDeckList(text, options = {}) {
   }
 
   return entries;
+}
+
+function parseSwuDckJsonDeck(text, { sourcePath } = {}) {
+  const raw = typeof text === 'string' ? text : '';
+  const jsonStartOffset = findJsonDeckStart(raw);
+  if (jsonStartOffset === -1) return null;
+
+  const payload = raw.slice(jsonStartOffset);
+  let parsed;
+  try {
+    parsed = JSON.parse(payload);
+  } catch (err) {
+    const suffix = err instanceof Error && err.message ? `: ${err.message}` : '';
+    throw new Error(`Unable to parse deck JSON${suffix}`);
+  }
+
+  const deck = parsed && typeof parsed === 'object' ? parsed : null;
+  if (!deck || Array.isArray(deck)) return null;
+
+  const hasDeckShape = deck.leader || deck.base || Array.isArray(deck.deck) || Array.isArray(deck.sideboard);
+  if (!hasDeckShape) return null;
+
+  const errors = [];
+  const entries = [];
+
+  const pushEntry = (section, item, fallbackCount = 1) => {
+    const normalizedItem = item && typeof item === 'object' ? item : { id: item };
+    const count = normalizedItem && normalizedItem.count !== undefined ? Number(normalizedItem.count) : fallbackCount;
+    const rawId = normalizedItem && normalizedItem.id !== undefined ? String(normalizedItem.id) : '';
+    const rawName = normalizedItem && normalizedItem.name !== undefined ? String(normalizedItem.name) : '';
+    const code = rawId ? parseSwuSetNumberCode(rawId) : null;
+
+    if (!Number.isFinite(count) || count <= 0) {
+      errors.push(`${section}: invalid count "${normalizedItem?.count ?? ''}"`);
+      return;
+    }
+
+    if (!code && !rawName) {
+      errors.push(`${section}: missing "id" or "name"`);
+      return;
+    }
+
+    entries.push({
+      count,
+      name: rawName || rawId || code || '',
+      code: code || undefined,
+      section,
+      source: { file: sourcePath, line: null, text: null },
+    });
+  };
+
+  if (deck.leader) {
+    pushEntry('leader', deck.leader, 1);
+  }
+
+  if (deck.base) {
+    pushEntry('base', deck.base, 1);
+  }
+
+  if (Array.isArray(deck.deck)) {
+    for (const item of deck.deck) {
+      pushEntry('deck', item);
+    }
+  } else if (deck.deck !== undefined) {
+    errors.push('deck: expected an array');
+  }
+
+  if (Array.isArray(deck.sideboard)) {
+    for (const item of deck.sideboard) {
+      pushEntry('sideboard', item);
+    }
+  } else if (deck.sideboard !== undefined) {
+    errors.push('sideboard: expected an array');
+  }
+
+  if (errors.length) {
+    const header = sourcePath ? `Invalid deck JSON in ${sourcePath}:` : 'Invalid deck JSON:';
+    throw new Error(`${header}\n- ${errors.join('\n- ')}`);
+  }
+
+  return entries;
+}
+
+function findJsonDeckStart(text) {
+  const raw = typeof text === 'string' ? text : '';
+  let i = 0;
+  let atLineStart = true;
+
+  if (raw.charCodeAt(0) === 0xfeff) i += 1;
+
+  while (i < raw.length) {
+    const ch = raw[i];
+
+    if (ch === '\r' || ch === '\n') {
+      atLineStart = true;
+      i += 1;
+      continue;
+    }
+
+    if (atLineStart) {
+      while (i < raw.length && (raw[i] === ' ' || raw[i] === '\t')) i += 1;
+      if (raw.startsWith('//', i)) {
+        while (i < raw.length && raw[i] !== '\n') i += 1;
+        continue;
+      }
+      if (raw[i] === '#') {
+        while (i < raw.length && raw[i] !== '\n') i += 1;
+        continue;
+      }
+    }
+
+    if (raw.startsWith('/*', i)) {
+      const end = raw.indexOf('*/', i + 2);
+      if (end === -1) return -1;
+      i = end + 2;
+      atLineStart = i === 0 || raw[i - 1] === '\n' || raw[i - 1] === '\r';
+      continue;
+    }
+
+    if (ch === '{' || ch === '[') return i;
+    if (/\s/.test(ch)) {
+      i += 1;
+      continue;
+    }
+
+    return -1;
+  }
+
+  return -1;
 }
 
 function parseSwuDeckLine(text, options = {}) {

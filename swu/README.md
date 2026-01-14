@@ -24,6 +24,13 @@ Supported card line formats:
 3xSOR_193
 ```
 
+SWUDB-style JSON exports are also supported (JSON object with `leader`, `base`, `deck`, `sideboard`), including `//` or `#` comments at the top of the file:
+
+```json
+// https://swudb.com/deck/...
+{ "leader": { "id": "SOR_009", "count": 1 }, "deck": [{ "id": "SOR_145", "count": 3 }] }
+```
+
 Set/number codes accept either `SET-###` (in brackets) or `SET_###` (as the whole card reference).
 
 Section headers from common exports are supported:
