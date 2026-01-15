@@ -10,3 +10,8 @@ CLI tools for The Lord of the Rings: The Card Game (LOTR LCG):
 
 Card data is fetched from RingsDB and cached under `lotr/.cache/`.
 
+## Decklist format
+
+- Card lines are `"<count> <name>"`, optionally with a `[code]` tag like `1 Gandalf[01073]`.
+- Directives: `[include:other-file]`, `[proxypagebreak]`.
+- Use `[All]` to expand ambiguous card names into every matching candidate.

@@ -4,7 +4,7 @@ const path = require('path');
 const { Command } = require('commander');
 const { readDeckText, parseDeckList, hasCardEntries } = require('../../shared/deck-utils');
 const { normalizeMarvelDeckEntries, formatResolvedDeckEntries } = require('./decklist');
-const { loadCardDatabase, buildCardLookup, resolveCard } = require('./card-data');
+const { loadCardDatabase, buildCardLookup, resolveCards } = require('./card-data');
 
 async function main() {
   const program = new Command();
@@ -41,11 +41,18 @@ async function main() {
   });
   const { lookup, cardIndex } = buildCardLookup(cards);
 
-  const resolvedEntries = entries.map(entry => {
-    if (!entry || entry.proxyPageBreak) return entry;
-    const card = resolveCard(entry, lookup, cardIndex, { defaultFace: options.face });
-    return { ...entry, code: card.code, name: card.name || entry.name };
-  });
+  const resolvedEntries = [];
+  for (const entry of entries) {
+    if (!entry || entry.proxyPageBreak) {
+      resolvedEntries.push(entry);
+      continue;
+    }
+
+    const cards = resolveCards(entry, lookup, cardIndex, { defaultFace: options.face });
+    for (const card of cards) {
+      resolvedEntries.push({ ...entry, code: card.code, name: card.name || entry.name });
+    }
+  }
 
   const outputText = Boolean(options.json)
     ? JSON.stringify(resolvedEntries, null, 2)

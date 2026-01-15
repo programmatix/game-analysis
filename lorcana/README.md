@@ -66,6 +66,8 @@ The default 3×3 grid mirrors classic proxy sheets with true-size cards and 1 
 
 Deck lists allow inline comments starting with `#` or `//`, plus block comments wrapped in `/* ... */`.
 
+Use `[All]` on a card line (e.g. `1 Heroic Rescue[All]`) to include every matching card when the name is ambiguous.
+
 ### Showcase slot
 
 - Finds the rarest card in the list using Lorcana rarity tiers.

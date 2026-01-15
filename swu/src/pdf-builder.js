@@ -22,7 +22,19 @@ const {
   drawRulers,
   drawPageLabel,
 } = require('../../shared/pdf-layout');
+const { applyRoundedRectClip, restoreGraphicsState } = require('../../shared/pdf-drawing');
 const { ensureCardImage, embedImage, MissingCardImageSourceError } = require('./image-utils');
+
+const PDF_OPS = {
+  pushGraphicsState,
+  popGraphicsState,
+  moveTo,
+  lineTo,
+  appendBezierCurve,
+  closePath,
+  clip,
+  endPath,
+};
 
 async function buildPdf({
   cards,
@@ -400,20 +412,12 @@ function fillSlots(entries, size, mapFn) {
 
 function drawCardImage(page, embedded, { x, y, width, height }) {
   const cornerRadius = Math.min(width, height) * 0.05;
-  const effectiveRadius = Math.max(0, Math.min(cornerRadius, width / 2, height / 2));
-
-  page.pushOperators(
-    pushGraphicsState(),
-    ...roundedRectPathOperators(x, y, width, height, effectiveRadius),
-    closePath(),
-    clip(),
-    endPath(),
-  );
+  applyRoundedRectClip(page, PDF_OPS, { x, y, width, height, radius: cornerRadius });
 
   const isLandscape = embedded.width > embedded.height;
   if (!isLandscape) {
     page.drawImage(embedded, { x, y, width, height });
-    page.pushOperators(popGraphicsState());
+    restoreGraphicsState(page, PDF_OPS);
     return;
   }
 
@@ -425,33 +429,7 @@ function drawCardImage(page, embedded, { x, y, width, height }) {
     rotate: degrees(90),
   });
 
-  page.pushOperators(popGraphicsState());
-}
-
-function roundedRectPathOperators(x, y, width, height, radius) {
-  if (!radius) {
-    return [moveTo(x, y), lineTo(x + width, y), lineTo(x + width, y + height), lineTo(x, y + height)];
-  }
-
-  const kappa = 0.5522847498307936;
-  const k = radius * kappa;
-
-  const x0 = x;
-  const y0 = y;
-  const x1 = x + width;
-  const y1 = y + height;
-
-  return [
-    moveTo(x0 + radius, y0),
-    lineTo(x1 - radius, y0),
-    appendBezierCurve(x1 - radius + k, y0, x1, y0 + radius - k, x1, y0 + radius),
-    lineTo(x1, y1 - radius),
-    appendBezierCurve(x1, y1 - radius + k, x1 - radius + k, y1, x1 - radius, y1),
-    lineTo(x0 + radius, y1),
-    appendBezierCurve(x0 + radius - k, y1, x0, y1 - radius + k, x0, y1 - radius),
-    lineTo(x0, y0 + radius),
-    appendBezierCurve(x0, y0 + radius - k, x0 + radius - k, y0, x0 + radius, y0),
-  ];
+  restoreGraphicsState(page, PDF_OPS);
 }
 
 function drawCardBackground(page, { x, y, width, height, color }) {

@@ -162,10 +162,52 @@ async function loadCardDatabase(allCardsPath) {
 
     for (const key of keys) {
       if (!key) continue;
-      lookup.set(key, card);
+      const existing = lookup.get(key);
+      if (existing) {
+        existing.push(card);
+      } else {
+        lookup.set(key, [card]);
+      }
     }
   }
   return lookup;
+}
+
+function entryWantsAllMatches(entry) {
+  const annotations = entry?.annotations;
+  if (annotations?.matchAll) return true;
+  const keywords = Array.isArray(annotations?.keywords) ? annotations.keywords : [];
+  return keywords.some(keyword => String(keyword).trim().toLowerCase() === 'all');
+}
+
+function dedupeByCode(cards) {
+  const seen = new Map();
+  for (const card of Array.isArray(cards) ? cards : []) {
+    const code = card?.code ? String(card.code) : '';
+    if (!code) continue;
+    if (!seen.has(code)) seen.set(code, card);
+  }
+  return Array.from(seen.values());
+}
+
+function logMatchAllResolution(entry, candidates, options = {}) {
+  if (!Array.isArray(candidates) || candidates.length < 2) return;
+  const maxCandidates = Number.isInteger(options.maxCandidates) ? options.maxCandidates : 50;
+
+  const name = entry?.name || '(unknown)';
+  const countLabel = Number(entry?.count) > 0 ? ` (x${Number(entry.count)})` : '';
+  const header = `[All] "${name}"${countLabel} matched ${candidates.length} cards:`;
+
+  const lines = [header];
+  for (const card of candidates.slice(0, maxCandidates)) {
+    const code = card?.fullIdentifier || card?.id || card?.code || '(no id)';
+    const label = card?.fullName || card?.name || '(no name)';
+    lines.push(`- ${code} — ${label}`);
+  }
+  if (candidates.length > maxCandidates) {
+    lines.push(`- ...and ${candidates.length - maxCandidates} more`);
+  }
+  console.warn(lines.join('\n'));
 }
 
 function resolveDeckCards(entries, lookup) {
@@ -176,13 +218,19 @@ function resolveDeckCards(entries, lookup) {
     }
 
     const key = normalizeName(entry.name);
-    const card = lookup.get(key);
-    if (!card) {
+    const matches = lookup.get(key);
+    if (!matches || !matches.length) {
       throw new Error(`Card "${entry.name}" was not found in allCards.json`);
     }
 
-    for (let i = 0; i < entry.count; i++) {
-      cards.push(card);
+    const candidates = entryWantsAllMatches(entry) ? dedupeByCode(matches) : [matches[matches.length - 1]];
+    if (entryWantsAllMatches(entry) && candidates.length > 1) {
+      logMatchAllResolution(entry, candidates);
+    }
+    for (const card of candidates) {
+      for (let i = 0; i < entry.count; i++) {
+        cards.push(card);
+      }
     }
   }
   return cards;

@@ -82,6 +82,46 @@ function describeAmbiguousCandidates(candidates) {
     .join('\n');
 }
 
+function entryWantsAllMatches(entry) {
+  const annotations = entry?.annotations;
+  if (annotations?.matchAll) return true;
+  const keywords = Array.isArray(annotations?.keywords) ? annotations.keywords : [];
+  return keywords.some(keyword => String(keyword).trim().toLowerCase() === 'all');
+}
+
+function formatDeckEntrySource(source) {
+  if (!source || typeof source !== 'object') return '';
+  const file = typeof source.file === 'string' ? source.file : '';
+  const line = Number.isInteger(source.line) ? source.line : null;
+  if (!file && line === null) return '';
+  if (file && line !== null) return `${file}:${line}`;
+  if (file) return file;
+  return `line ${line}`;
+}
+
+function logMatchAllResolution(entry, candidates, options = {}) {
+  if (!Array.isArray(candidates) || candidates.length < 2) return;
+  const maxCandidates = Number.isInteger(options.maxCandidates) ? options.maxCandidates : 50;
+
+  const name = entry?.name || '(unknown)';
+  const sourceLabel = formatDeckEntrySource(entry?.source);
+  const countLabel = Number(entry?.count) > 0 ? ` (x${Number(entry.count)})` : '';
+  const header = `[All] "${name}"${countLabel}${sourceLabel ? ` — ${sourceLabel}` : ''} matched ${candidates.length} cards:`;
+
+  const lines = [header];
+  for (const card of candidates.slice(0, maxCandidates)) {
+    const headerParts = [card?.code || '(no code)', card?.name || '(no name)'];
+    if (Number.isFinite(card?.xp)) {
+      headerParts.push(`XP ${card.xp}`);
+    }
+    lines.push(`- ${headerParts.join(' — ')}`);
+  }
+  if (candidates.length > maxCandidates) {
+    lines.push(`- ...and ${candidates.length - maxCandidates} more`);
+  }
+  console.warn(lines.join('\n'));
+}
+
 function findAmbiguousEntries(entries, lookup) {
   const ambiguous = [];
   for (const entry of entries) {
@@ -95,6 +135,7 @@ function findAmbiguousEntries(entries, lookup) {
     const unique = dedupeByCode(matches);
     const candidates = unique.length ? unique : matches;
     if (candidates.length > 1) {
+      if (entryWantsAllMatches(entry)) continue;
       ambiguous.push({ entry, candidates });
     }
   }
@@ -122,6 +163,26 @@ function resolveDeckCards(entries, lookup, options = {}) {
     if (entry?.proxyPageBreak) {
       if (preservePageBreaks) {
         cards.push({ proxyPageBreak: true });
+      }
+      continue;
+    }
+
+    if (entryWantsAllMatches(entry) && !entry.code) {
+      const key = normalizeName(entry.name);
+      const matches = lookup.get(key);
+      if (!matches || !matches.length) {
+        throw new Error(`Card "${entry.name}" was not found in arkhamdb-json-data.`);
+      }
+
+      const unique = dedupeByCode(matches);
+      const candidates = unique.length ? unique : matches;
+      if (candidates.length > 1) {
+        logMatchAllResolution(entry, candidates);
+      }
+      for (const card of candidates) {
+        for (let i = 0; i < entry.count; i++) {
+          cards.push(attachEntry ? { card, entry } : card);
+        }
       }
       continue;
     }

@@ -4,7 +4,7 @@ const path = require('path');
 const { Command } = require('commander');
 const { readDeckText, hasCardEntries } = require('../../shared/deck-utils');
 const { parseSwuDeckList, formatResolvedDeckEntries } = require('./decklist');
-const { loadCardDatabase, buildCardLookup, resolveCard } = require('./card-data');
+const { loadCardDatabase, buildCardLookup, resolveCards } = require('./card-data');
 
 async function main() {
   const program = new Command();
@@ -35,11 +35,18 @@ async function main() {
   const cards = await loadCardDatabase({ dataFile: options.dataFile ? path.resolve(options.dataFile) : null });
   const { lookup, cardIndex } = buildCardLookup(cards);
 
-  const resolvedEntries = parsedEntries.map(entry => {
-    if (!entry || entry.proxyPageBreak) return entry;
-    const card = resolveCard(entry, lookup, cardIndex);
-    return { ...entry, code: card.code, name: card.fullName || card.name || entry.name };
-  });
+  const resolvedEntries = [];
+  for (const entry of parsedEntries) {
+    if (!entry || entry.proxyPageBreak) {
+      resolvedEntries.push(entry);
+      continue;
+    }
+
+    const cards = resolveCards(entry, lookup, cardIndex);
+    for (const card of cards) {
+      resolvedEntries.push({ ...entry, code: card.code, name: card.fullName || card.name || entry.name });
+    }
+  }
 
   const outputText = Boolean(options.json)
     ? JSON.stringify(resolvedEntries, null, 2)
@@ -60,4 +67,3 @@ main().catch(err => {
   console.error(err instanceof Error ? err.message : err);
   process.exit(1);
 });
-

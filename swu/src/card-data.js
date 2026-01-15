@@ -301,6 +301,62 @@ function resolveCard(entry, lookup, cardIndex) {
   return candidates[0];
 }
 
+function entryWantsAllMatches(entry) {
+  const annotations = entry?.annotations;
+  if (annotations?.matchAll) return true;
+  const keywords = Array.isArray(annotations?.keywords) ? annotations.keywords : [];
+  return keywords.some(keyword => String(keyword).trim().toLowerCase() === 'all');
+}
+
+function logMatchAllResolution(entry, candidates, options = {}) {
+  if (!Array.isArray(candidates) || candidates.length < 2) return;
+  const maxCandidates = Number.isInteger(options.maxCandidates) ? options.maxCandidates : 50;
+
+  const name = entry?.name || '(unknown)';
+  const sourceLabel = formatDeckEntrySource(entry?.source);
+  const countLabel = Number(entry?.count) > 0 ? ` (x${Number(entry.count)})` : '';
+  const sectionLabel = entry?.section ? ` [${entry.section}]` : '';
+  const header = `[All] "${name}"${countLabel}${sectionLabel}${sourceLabel ? ` — ${sourceLabel}` : ''} matched ${candidates.length} cards:`;
+
+  const lines = [header];
+  for (const card of candidates.slice(0, maxCandidates)) {
+    lines.push(`- ${card?.code || '(no code)'} — ${card?.fullName || card?.name || '(no name)'} (${card?.set || 'unknown set'})`);
+  }
+  if (candidates.length > maxCandidates) {
+    lines.push(`- ...and ${candidates.length - maxCandidates} more`);
+  }
+  console.warn(lines.join('\n'));
+}
+
+function resolveCards(entry, lookup, cardIndex) {
+  if (!entry) throw new Error('Cannot resolve an empty deck entry.');
+
+  if (entry.code) {
+    return [resolveCardByCode(entry.code, cardIndex)];
+  }
+
+  const key = normalizeCardKey(entry.name);
+  const matches = lookup.get(key);
+  if (!matches || !matches.length) {
+    throw new Error(`Card "${entry.name}" was not found in the SWU card database.`);
+  }
+
+  const unique = dedupeByCode(matches);
+  const candidates = unique.length ? unique : matches;
+  if (candidates.length > 1) {
+    if (entryWantsAllMatches(entry)) {
+      logMatchAllResolution(entry, candidates);
+      return candidates;
+    }
+
+    const disambiguated = disambiguateByHint(entry, candidates);
+    if (disambiguated) return [disambiguated];
+    throw new AmbiguousCardError(entry, candidates);
+  }
+
+  return [candidates[0]];
+}
+
 function resolveCardByCode(code, cardIndex) {
   const raw = typeof code === 'string' ? code.trim() : '';
   if (!raw) throw new Error('Card code is missing.');
@@ -336,9 +392,9 @@ function resolveDeckCards(entries, lookup, cardIndex, options = {}) {
     }
     if (!entry) continue;
 
-    let card;
+    let resolvedCards;
     try {
-      card = resolveCard(entry, lookup, cardIndex);
+      resolvedCards = resolveCards(entry, lookup, cardIndex);
     } catch (err) {
       if (err instanceof AmbiguousCardError) {
         ambiguities.push(err);
@@ -347,8 +403,10 @@ function resolveDeckCards(entries, lookup, cardIndex, options = {}) {
       throw err;
     }
 
-    for (let i = 0; i < (Number(entry.count) || 0); i += 1) {
-      cards.push(attachEntry ? { card, entry } : card);
+    for (const card of resolvedCards) {
+      for (let i = 0; i < (Number(entry.count) || 0); i += 1) {
+        cards.push(attachEntry ? { card, entry } : card);
+      }
     }
   }
 
@@ -639,5 +697,6 @@ module.exports = {
   buildCardLookup,
   buildCardCodeIndex,
   resolveCard,
+  resolveCards,
   resolveDeckCards,
 };

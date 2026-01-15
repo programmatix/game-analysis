@@ -10,6 +10,7 @@ Each card line can be:
 2 Backflip
 2x Energy
 1 Spider-Man[01001a]
+1 Heroic Rescue[All]
 [include:some-other-list]
 [proxypagebreak]
 ```
@@ -17,6 +18,8 @@ Each card line can be:
 Comments are supported with `#`, `//`, and `/* ... */`.
 
 MarvelCDB text exports often append pack/position in parentheses (e.g. `Backflip (core, 3)`); Marvel tools strip trailing parentheticals that contain digits so those names still resolve.
+
+Use `[All]` to expand ambiguous card names into every matching candidate (useful when the same card name exists in multiple printings/sets).
 
 ### Proxy deck generator
 

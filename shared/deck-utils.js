@@ -124,6 +124,7 @@ function parseNameWithCode(text) {
   let drawTotal = 0;
   let resourcesPerTurnTotal = 0;
   let drawPerTurnTotal = 0;
+  let matchAll = false;
   const keywordSet = new Set();
 
   for (const token of bracketTokens) {
@@ -131,6 +132,11 @@ function parseNameWithCode(text) {
 
     if (!code && isPossibleCardCode(lowered)) {
       code = token.value;
+      continue;
+    }
+
+    if (lowered === 'all') {
+      matchAll = true;
       continue;
     }
 
@@ -165,6 +171,9 @@ function parseNameWithCode(text) {
   }
   if (drawPerTurnTotal !== 0) {
     annotations.drawPerTurn = drawPerTurnTotal;
+  }
+  if (matchAll) {
+    annotations.matchAll = true;
   }
   if (keywordSet.size) {
     annotations.keywords = Array.from(keywordSet);

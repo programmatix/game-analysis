@@ -4,7 +4,7 @@ const path = require('path');
 const { Command } = require('commander');
 const { readDeckText, hasCardEntries } = require('../../shared/deck-utils');
 const { parseLotrDeckList, formatResolvedDeckEntries } = require('./decklist');
-const { DEFAULT_BASE_URL, loadCardDatabase, buildCardLookup, resolveCard } = require('./card-data');
+const { DEFAULT_BASE_URL, loadCardDatabase, buildCardLookup, resolveCards } = require('./card-data');
 
 const DEFAULT_DATA_CACHE = path.join(__dirname, '..', '.cache', 'ringsdb-cards.json');
 
@@ -45,17 +45,24 @@ async function main() {
   const { lookup, cardIndex } = buildCardLookup(cards);
 
   const failures = [];
-  const resolvedEntries = parsedEntries.map(entry => {
-    if (!entry || entry.proxyPageBreak) return entry;
+  const resolvedEntries = [];
+  for (const entry of parsedEntries) {
+    if (!entry || entry.proxyPageBreak) {
+      resolvedEntries.push(entry);
+      continue;
+    }
+
     try {
-      const card = resolveCard(entry, lookup, cardIndex);
-      return { ...entry, code: card.code, name: card.fullName || card.name || entry.name };
+      const cards = resolveCards(entry, lookup, cardIndex);
+      for (const card of cards) {
+        resolvedEntries.push({ ...entry, code: card.code, name: card.fullName || card.name || entry.name });
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       failures.push(`- ${formatEntryLabel(entry)}: ${message}`);
-      return { ...entry, resolved: null };
+      resolvedEntries.push({ ...entry, resolved: null });
     }
-  });
+  }
   if (failures.length) {
     throw new Error(`Failed to resolve ${failures.length} card${failures.length === 1 ? '' : 's'}:\n${failures.join('\n')}`);
   }

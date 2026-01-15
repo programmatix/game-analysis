@@ -257,6 +257,67 @@ function resolveCard(entry, lookup, cardIndex, options = {}) {
   return candidates[0];
 }
 
+function entryWantsAllMatches(entry) {
+  const annotations = entry?.annotations;
+  if (annotations?.matchAll) return true;
+  const keywords = Array.isArray(annotations?.keywords) ? annotations.keywords : [];
+  return keywords.some(keyword => String(keyword).trim().toLowerCase() === 'all');
+}
+
+function logMatchAllResolution(entry, candidates, options = {}) {
+  if (!Array.isArray(candidates) || candidates.length < 2) return;
+  const maxCandidates = Number.isInteger(options.maxCandidates) ? options.maxCandidates : 50;
+
+  const name = entry?.name || '(unknown)';
+  const sourceLabel = formatDeckEntrySource(entry?.source);
+  const countLabel = Number(entry?.count) > 0 ? ` (x${Number(entry.count)})` : '';
+  const header = `[All] "${name}"${countLabel}${sourceLabel ? ` — ${sourceLabel}` : ''} matched ${candidates.length} cards:`;
+
+  const lines = [header];
+  for (const card of candidates.slice(0, maxCandidates)) {
+    lines.push(`- ${card?.code || '(no code)'} — ${card?.name || '(no name)'}`);
+  }
+  if (candidates.length > maxCandidates) {
+    lines.push(`- ...and ${candidates.length - maxCandidates} more`);
+  }
+  console.warn(lines.join('\n'));
+}
+
+function resolveCards(entry, lookup, cardIndex, options = {}) {
+  const defaultFace = options.defaultFace || 'a';
+  if (!entry) {
+    throw new Error('Cannot resolve an empty deck entry.');
+  }
+
+  if (entry.code) {
+    return [resolveCardByCode(entry.code, cardIndex, defaultFace)];
+  }
+
+  const key = normalizeCardKey(entry.name);
+  const matches = lookup.get(key);
+  if (!matches || !matches.length) {
+    throw new Error(`Card "${entry.name}" was not found in MarvelCDB data.`);
+  }
+
+  const unique = dedupeByCode(matches);
+  const candidates = unique.length ? unique : matches;
+  if (candidates.length > 1) {
+    if (entryWantsAllMatches(entry)) {
+      logMatchAllResolution(entry, candidates);
+      return candidates;
+    }
+
+    const disambiguated = disambiguateByHint(entry, candidates);
+    if (disambiguated) {
+      return [disambiguated];
+    }
+
+    throw new AmbiguousCardError(entry, candidates);
+  }
+
+  return [candidates[0]];
+}
+
 function disambiguateByHint(entry, candidates) {
   const hint = entry?.marvelcdb;
   if (!hint || !Array.isArray(candidates) || candidates.length < 2) return null;
@@ -298,9 +359,9 @@ function resolveDeckCards(entries, lookup, cardIndex, options = {}) {
     }
     if (!entry) continue;
 
-    let card;
+    let resolvedCards;
     try {
-      card = resolveCard(entry, lookup, cardIndex, { defaultFace });
+      resolvedCards = resolveCards(entry, lookup, cardIndex, { defaultFace });
     } catch (err) {
       if (err instanceof AmbiguousCardError) {
         ambiguities.push(err);
@@ -308,8 +369,11 @@ function resolveDeckCards(entries, lookup, cardIndex, options = {}) {
       }
       throw err;
     }
-    for (let i = 0; i < (Number(entry.count) || 0); i += 1) {
-      cards.push(attachEntry ? { card, entry } : card);
+
+    for (const card of resolvedCards) {
+      for (let i = 0; i < (Number(entry.count) || 0); i += 1) {
+        cards.push(attachEntry ? { card, entry } : card);
+      }
     }
   }
 
@@ -396,5 +460,6 @@ module.exports = {
   buildCoreSetMembership,
   buildCanonicalPackCodes,
   resolveCard,
+  resolveCards,
   resolveDeckCards,
 };

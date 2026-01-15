@@ -21,6 +21,7 @@ Supported card line formats:
 3 Battlefield Marine
 3x TIE/ln Fighter
 1 Luke Skywalker, Faithful Friend [SOR-005]
+1 Heroic Rescue[All]
 3xSOR_193
 ```
 
@@ -55,6 +56,8 @@ Directives are supported:
 ```
 
 Comments are supported with `#`, `//`, and `/* ... */`.
+
+Use `[All]` to expand ambiguous card names into every matching candidate (useful when the same card name exists in multiple sets).
 
 ## Proxy deck generator
 

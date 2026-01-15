@@ -1,4 +1,17 @@
-const { PDFDocument, rgb, StandardFonts, degrees } = require('pdf-lib');
+const {
+  PDFDocument,
+  rgb,
+  StandardFonts,
+  degrees,
+  pushGraphicsState,
+  popGraphicsState,
+  moveTo,
+  lineTo,
+  appendBezierCurve,
+  closePath,
+  clip,
+  endPath,
+} = require('pdf-lib');
 const {
   GAP_BETWEEN_CARDS_MM,
   A4_WIDTH_PT,
@@ -9,7 +22,19 @@ const {
   drawRulers,
   drawPageLabel,
 } = require('../../shared/pdf-layout');
+const { applyRoundedRectClip, restoreGraphicsState } = require('../../shared/pdf-drawing');
 const { ensureCardImage, embedImage, MissingCardImageSourceError } = require('./image-utils');
+
+const PDF_OPS = {
+  pushGraphicsState,
+  popGraphicsState,
+  moveTo,
+  lineTo,
+  appendBezierCurve,
+  closePath,
+  clip,
+  endPath,
+};
 
 async function buildPdf({
   cards,
@@ -424,9 +449,13 @@ function fillSlots(entries, size, mapFn) {
 }
 
 function drawCardImage(page, embedded, { x, y, width, height }) {
+  const cornerRadius = Math.min(width, height) * 0.03;
+  applyRoundedRectClip(page, PDF_OPS, { x, y, width, height, radius: cornerRadius });
+
   const isLandscape = embedded.width > embedded.height;
   if (!isLandscape) {
     page.drawImage(embedded, { x, y, width, height });
+    restoreGraphicsState(page, PDF_OPS);
     return;
   }
 
@@ -437,6 +466,8 @@ function drawCardImage(page, embedded, { x, y, width, height }) {
     height: width,
     rotate: degrees(90),
   });
+
+  restoreGraphicsState(page, PDF_OPS);
 }
 
 function drawCardBackground(page, { x, y, width, height, color }) {
