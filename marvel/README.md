@@ -75,6 +75,14 @@ Download a published decklist (by id or URL) and emit a normalized list in this 
 npx marvel-download 40979 | npx marvel-proxy
 ```
 
+By default, this also appends the hero’s encounter cards (obligation + nemesis set). Use `--no-hero-encounter` to disable.
+
+To output *only* the hero’s encounter cards (for printing just the “bad” stuff):
+
+```bash
+npx marvel-download 40979 --only-hero-encounter | npx marvel-proxy
+```
+
 ### Pack deck lists
 
 Generate a deck list containing all cards from a given Marvel Champions pack (useful for proxying a hero/scenario pack):

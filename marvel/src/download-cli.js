@@ -17,6 +17,8 @@ async function main() {
     .option('--data-cache <file>', 'Where to cache MarvelCDB cards JSON', path.join('.cache', 'marvelcdb-cards.json'))
     .option('--refresh-data', 'Re-download the MarvelCDB cards JSON into the cache', false)
     .option('--face <a|b>', 'Default face for numeric codes like [01001]', 'a')
+    .option('--no-hero-encounter', 'Do not include the hero’s obligation/nemesis encounter cards')
+    .option('--only-hero-encounter', 'Only output the hero’s obligation/nemesis encounter cards')
     .option('--no-header', 'Do not include source header comments')
     .parse(process.argv);
 
@@ -33,10 +35,14 @@ async function main() {
   const { lookup, cardIndex } = buildCardLookup(cards);
 
   const defaultFace = String(options.face || 'a').toLowerCase() === 'b' ? 'b' : 'a';
+  const onlyHeroEncounter = Boolean(options.onlyHeroEncounter);
+  const includeHeroEncounter = onlyHeroEncounter || Boolean(options.heroEncounter);
   const { lines, warnings } = buildDecklistLines(deck, lookup, cardIndex, {
     defaultFace,
     sourceUrl,
     includeHeader: Boolean(options.header),
+    includeHeroEncounter,
+    onlyHeroEncounter,
   });
 
   const outputText = `${lines.join('\n')}\n`;
@@ -124,6 +130,8 @@ async function fetchMarvelCdbDeck(id, baseUrl) {
 function buildDecklistLines(deck, lookup, cardIndex, options = {}) {
   const defaultFace = options.defaultFace || 'a';
   const includeHeader = Boolean(options.includeHeader);
+  const includeHeroEncounter = Boolean(options.includeHeroEncounter);
+  const onlyHeroEncounter = Boolean(options.onlyHeroEncounter);
   const sourceUrl = typeof options.sourceUrl === 'string' ? options.sourceUrl : null;
 
   const warnings = [];
@@ -136,8 +144,13 @@ function buildDecklistLines(deck, lookup, cardIndex, options = {}) {
     if (lines.length) lines.push('');
   }
 
-  const entries = collectDeckEntries(deck);
-  appendLinkedEntries(entries, lookup, cardIndex, { defaultFace, warnings });
+  const entries = onlyHeroEncounter ? [] : collectDeckEntries(deck);
+  if (!onlyHeroEncounter) {
+    appendLinkedEntries(entries, lookup, cardIndex, { defaultFace, warnings });
+  }
+  if (includeHeroEncounter) {
+    appendHeroEncounterEntries(entries, deck, lookup, cardIndex, { defaultFace, warnings });
+  }
   const sorted = entries.sort(compareEntriesByCode);
 
   for (const entry of sorted) {
@@ -213,6 +226,95 @@ function appendLinkedEntries(entries, lookup, cardIndex, options = {}) {
   const merged = dedupeEntries([...(Array.isArray(entries) ? entries : []), ...toAdd]);
   entries.length = 0;
   entries.push(...merged);
+}
+
+function appendHeroEncounterEntries(entries, deck, lookup, cardIndex, options = {}) {
+  const defaultFace = options.defaultFace || 'a';
+  const warnings = Array.isArray(options.warnings) ? options.warnings : [];
+
+  const heroCode = deck?.hero_code ? String(deck.hero_code).trim() : '';
+  if (!heroCode) {
+    warnings.push('Warning: Deck has no hero_code, so obligation/nemesis cards could not be added.');
+    return;
+  }
+
+  let heroCard;
+  try {
+    heroCard = resolveCard({ code: heroCode }, lookup, cardIndex, { defaultFace });
+  } catch (err) {
+    warnings.push(
+      `Warning: Could not resolve hero code "${heroCode}" to find obligation/nemesis cards: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+    return;
+  }
+
+  const heroSetCode = heroCard?.card_set_code ? String(heroCard.card_set_code).trim() : '';
+  if (!heroSetCode) {
+    warnings.push(`Warning: Hero "${heroCard?.name || heroCode}" has no card_set_code; cannot find obligation/nemesis cards.`);
+    return;
+  }
+
+  const existing = new Set();
+  for (const entry of Array.isArray(entries) ? entries : []) {
+    const code = String(entry?.code || '').trim();
+    if (code) existing.add(code);
+  }
+
+  const toAdd = [];
+
+  const obligation = collectSetCards(cardIndex, {
+    cardSetCode: heroSetCode,
+    typeCodes: ['obligation'],
+  });
+  if (!obligation.length) {
+    warnings.push(`Warning: No obligation found for hero set "${heroSetCode}".`);
+  } else {
+    for (const code of obligation) {
+      if (existing.has(code)) continue;
+      toAdd.push({ code, count: 1 });
+    }
+  }
+
+  const nemesisSetCode = `${heroSetCode}_nemesis`;
+  const nemesisCards = collectSetCards(cardIndex, {
+    cardSetCode: nemesisSetCode,
+    cardSetTypeCode: 'nemesis',
+  });
+  if (!nemesisCards.length) {
+    warnings.push(`Warning: No nemesis cards found for hero set "${heroSetCode}" (expected card_set_code "${nemesisSetCode}").`);
+  } else {
+    for (const code of nemesisCards) {
+      if (existing.has(code)) continue;
+      toAdd.push({ code, count: 1 });
+    }
+  }
+
+  const merged = dedupeEntries([...(Array.isArray(entries) ? entries : []), ...toAdd]);
+  entries.length = 0;
+  entries.push(...merged);
+}
+
+function collectSetCards(cardIndex, options = {}) {
+  const cardSetCode = typeof options.cardSetCode === 'string' ? options.cardSetCode.trim() : '';
+  if (!cardSetCode) return [];
+
+  const cardSetTypeCode = typeof options.cardSetTypeCode === 'string' ? options.cardSetTypeCode.trim() : '';
+  const typeCodes = Array.isArray(options.typeCodes) ? options.typeCodes.map(v => String(v).toLowerCase()) : null;
+
+  const codes = new Set();
+  for (const card of cardIndex instanceof Map ? cardIndex.values() : []) {
+    if (!card?.code) continue;
+    if (String(card.card_set_code || '').trim() !== cardSetCode) continue;
+    if (cardSetTypeCode && String(card.card_set_type_name_code || '').trim() !== cardSetTypeCode) continue;
+    if (typeCodes && typeCodes.length) {
+      const type = String(card.type_code || '').toLowerCase();
+      if (!typeCodes.includes(type)) continue;
+    }
+    codes.add(String(card.code).trim());
+  }
+  return Array.from(codes.values());
 }
 
 function dedupeEntries(entries) {
