@@ -24,7 +24,8 @@ Create printable proxy PDFs for Arkham Horror: The Card Game. The tool reads a d
 
 Tag Arkham-specific utility in square brackets so the sampler CLI can track it:
 
-- `[all]` expands ambiguous card names into every matching candidate (useful when printing proxies for multiple printings).
+- Ambiguous card names expand into every matching candidate by default for `arkham-proxy` and `arkham-sets`.
+- `[all]` also expands ambiguous card names into every matching candidate (useful when you want to make that intent explicit in the decklist).
 - `[weapon]` marks a card as a weapon.
 - `[resources:<n>]` adds that many resources when you see and play the card.
 - `[resourcesperturn:<n>]` simulates getting that many resources per turn after the card is seen (accumulates over turns).

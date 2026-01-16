@@ -156,8 +156,11 @@ function assertNoAmbiguousCards(entries, lookup) {
 function resolveDeckCards(entries, lookup, options = {}) {
   const attachEntry = Boolean(options.attachEntry);
   const preservePageBreaks = Boolean(options.preservePageBreaks);
+  const defaultAllOnAmbiguity = options.defaultAllOnAmbiguity !== false;
   const cardEntries = Array.isArray(entries) ? entries.filter(entry => entry && !entry.proxyPageBreak) : [];
-  assertNoAmbiguousCards(cardEntries, lookup);
+  if (!defaultAllOnAmbiguity) {
+    assertNoAmbiguousCards(cardEntries, lookup);
+  }
   const cards = [];
   for (const entry of entries) {
     if (entry?.proxyPageBreak) {
@@ -167,24 +170,38 @@ function resolveDeckCards(entries, lookup, options = {}) {
       continue;
     }
 
-    if (entryWantsAllMatches(entry) && !entry.code) {
-      const key = normalizeName(entry.name);
+    if (!entry?.code) {
+      const key = normalizeName(entry?.name);
       const matches = lookup.get(key);
-      if (!matches || !matches.length) {
-        throw new Error(`Card "${entry.name}" was not found in arkhamdb-json-data.`);
-      }
+      if (matches && matches.length) {
+        const unique = dedupeByCode(matches);
+        const candidates = unique.length ? unique : matches;
+        const isAmbiguous = candidates.length > 1;
+        const matchAll = entryWantsAllMatches(entry) || (defaultAllOnAmbiguity && isAmbiguous);
 
-      const unique = dedupeByCode(matches);
-      const candidates = unique.length ? unique : matches;
-      if (candidates.length > 1) {
-        logMatchAllResolution(entry, candidates);
-      }
-      for (const card of candidates) {
+        if (matchAll) {
+          if (isAmbiguous) {
+            logMatchAllResolution(entry, candidates);
+          }
+          for (const card of candidates) {
+            for (let i = 0; i < entry.count; i++) {
+              cards.push(attachEntry ? { card, entry } : card);
+            }
+          }
+          continue;
+        }
+
+        if (isAmbiguous) {
+          const details = describeAmbiguousCandidates(candidates);
+          throw new Error(`Card "${entry.name}" is ambiguous. Candidates:\n${details}`);
+        }
+
         for (let i = 0; i < entry.count; i++) {
+          const card = candidates[0];
           cards.push(attachEntry ? { card, entry } : card);
         }
+        continue;
       }
-      continue;
     }
 
     const card = resolveCard(entry, lookup);

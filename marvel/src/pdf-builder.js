@@ -463,17 +463,20 @@ function drawCardImage(page, embedded, { x, y, width, height }) {
   applyRoundedRectClip(page, PDF_OPS, { x, y, width, height, radius: cornerRadius });
 
   const isLandscape = embedded.width > embedded.height;
-  if (!isLandscape) {
-    page.drawImage(embedded, { x, y, width, height });
+  const cover = computeCoverPlacement(embedded, { x, y, width, height, rotate: isLandscape });
+
+  if (!cover.rotate) {
+    const { rotate, ...drawOptions } = cover;
+    page.drawImage(embedded, drawOptions);
     restoreGraphicsState(page, PDF_OPS);
     return;
   }
 
   page.drawImage(embedded, {
-    x: x + width,
-    y,
-    width: height,
-    height: width,
+    x: cover.x + cover.finalWidth,
+    y: cover.y,
+    width: cover.finalHeight,
+    height: cover.finalWidth,
     rotate: degrees(90),
   });
 
@@ -482,6 +485,46 @@ function drawCardImage(page, embedded, { x, y, width, height }) {
 
 function drawCardBackground(page, { x, y, width, height, color }) {
   page.drawRectangle({ x, y, width, height, color });
+}
+
+function computeCoverPlacement(embedded, { x, y, width, height, rotate }) {
+  const targetWidth = Number(width) || 0;
+  const targetHeight = Number(height) || 0;
+  const srcWidth = Number(embedded?.width) || 0;
+  const srcHeight = Number(embedded?.height) || 0;
+
+  if (!targetWidth || !targetHeight || !srcWidth || !srcHeight) {
+    return rotate
+      ? {
+          rotate: true,
+          x,
+          y,
+          finalWidth: targetWidth,
+          finalHeight: targetHeight,
+        }
+      : { x, y, width: targetWidth, height: targetHeight, rotate: false };
+  }
+
+  const effectiveSrcWidth = rotate ? srcHeight : srcWidth;
+  const effectiveSrcHeight = rotate ? srcWidth : srcHeight;
+
+  const scale = Math.max(targetWidth / effectiveSrcWidth, targetHeight / effectiveSrcHeight);
+  const finalWidth = effectiveSrcWidth * scale;
+  const finalHeight = effectiveSrcHeight * scale;
+  const offsetX = x + (targetWidth - finalWidth) / 2;
+  const offsetY = y + (targetHeight - finalHeight) / 2;
+
+  if (!rotate) {
+    return { x: offsetX, y: offsetY, width: finalWidth, height: finalHeight, rotate: false };
+  }
+
+  return {
+    rotate: true,
+    x: offsetX,
+    y: offsetY,
+    finalWidth,
+    finalHeight,
+  };
 }
 
 module.exports = {
