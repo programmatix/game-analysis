@@ -45,6 +45,8 @@ Example: `2 emergency cache[01088] [resources:3]`
 npx arkham-proxy --input deck.txt --name "Roland Solo"
 ```
 
+Proxy PDFs include a 2mm black bleed beyond the cut marks.
+
 ### Deck annotator
 
 Add inline comments (prefixed with `//?`) with XP, cost, type, traits, slot, and text for each card. Re-running replaces any previous `//?` annotations:

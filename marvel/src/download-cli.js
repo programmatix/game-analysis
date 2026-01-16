@@ -256,38 +256,44 @@ function appendHeroEncounterEntries(entries, deck, lookup, cardIndex, options = 
     return;
   }
 
-  const existing = new Set();
+  const existingCounts = new Map();
   for (const entry of Array.isArray(entries) ? entries : []) {
     const code = String(entry?.code || '').trim();
-    if (code) existing.add(code);
+    if (!code) continue;
+    const count = Number(entry?.count) || 0;
+    existingCounts.set(code, (existingCounts.get(code) || 0) + count);
   }
 
   const toAdd = [];
 
-  const obligation = collectSetCards(cardIndex, {
+  const obligation = collectSetCardsWithCounts(cardIndex, {
     cardSetCode: heroSetCode,
     typeCodes: ['obligation'],
   });
   if (!obligation.length) {
     warnings.push(`Warning: No obligation found for hero set "${heroSetCode}".`);
   } else {
-    for (const code of obligation) {
-      if (existing.has(code)) continue;
-      toAdd.push({ code, count: 1 });
+    for (const { code, count } of obligation) {
+      const already = existingCounts.get(code) || 0;
+      const needed = Math.max(0, (Number(count) || 0) - already);
+      if (needed <= 0) continue;
+      toAdd.push({ code, count: needed });
     }
   }
 
   const nemesisSetCode = `${heroSetCode}_nemesis`;
-  const nemesisCards = collectSetCards(cardIndex, {
+  const nemesisCards = collectSetCardsWithCounts(cardIndex, {
     cardSetCode: nemesisSetCode,
     cardSetTypeCode: 'nemesis',
   });
   if (!nemesisCards.length) {
     warnings.push(`Warning: No nemesis cards found for hero set "${heroSetCode}" (expected card_set_code "${nemesisSetCode}").`);
   } else {
-    for (const code of nemesisCards) {
-      if (existing.has(code)) continue;
-      toAdd.push({ code, count: 1 });
+    for (const { code, count } of nemesisCards) {
+      const already = existingCounts.get(code) || 0;
+      const needed = Math.max(0, (Number(count) || 0) - already);
+      if (needed <= 0) continue;
+      toAdd.push({ code, count: needed });
     }
   }
 
@@ -296,14 +302,14 @@ function appendHeroEncounterEntries(entries, deck, lookup, cardIndex, options = 
   entries.push(...merged);
 }
 
-function collectSetCards(cardIndex, options = {}) {
+function collectSetCardsWithCounts(cardIndex, options = {}) {
   const cardSetCode = typeof options.cardSetCode === 'string' ? options.cardSetCode.trim() : '';
   if (!cardSetCode) return [];
 
   const cardSetTypeCode = typeof options.cardSetTypeCode === 'string' ? options.cardSetTypeCode.trim() : '';
   const typeCodes = Array.isArray(options.typeCodes) ? options.typeCodes.map(v => String(v).toLowerCase()) : null;
 
-  const codes = new Set();
+  const codes = new Map(); // code -> count
   for (const card of cardIndex instanceof Map ? cardIndex.values() : []) {
     if (!card?.code) continue;
     if (String(card.card_set_code || '').trim() !== cardSetCode) continue;
@@ -312,9 +318,13 @@ function collectSetCards(cardIndex, options = {}) {
       const type = String(card.type_code || '').toLowerCase();
       if (!typeCodes.includes(type)) continue;
     }
-    codes.add(String(card.code).trim());
+    const code = String(card.code).trim();
+    if (!code) continue;
+    const quantityRaw = Number(card.quantity);
+    const quantity = Number.isFinite(quantityRaw) && quantityRaw > 0 ? Math.floor(quantityRaw) : 1;
+    codes.set(code, Math.max(codes.get(code) || 0, quantity));
   }
-  return Array.from(codes.values());
+  return Array.from(codes.entries()).map(([code, count]) => ({ code, count }));
 }
 
 function dedupeEntries(entries) {

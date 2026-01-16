@@ -1,0 +1,4 @@
+1 Knife [01086]
+1 Emergency Cache [01088]
+1 Deduction [01039]
+1 .45 Automatic [01016]

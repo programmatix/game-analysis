@@ -35,6 +35,7 @@ Useful flags:
 - `--include-backs` adds a second page of backs for double-sided cards and flips each row for duplex alignment.
 - `--skip-core` skips cards whose `pack_code` is `core` (useful if you own only the Core Set).
 - Use `[skipproxy]` or `[skipback]` on a line to omit that card or its back (the latter only matters with `--include-backs`).
+- Proxy PDFs include a 2mm black bleed beyond the cut marks.
 
 ### Deck annotator
 

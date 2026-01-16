@@ -87,7 +87,25 @@ async function buildPdf({
     const page = pdfDoc.addPage([A4_WIDTH_PT, A4_HEIGHT_PT]);
 
     const { scaledWidth, scaledHeight, scaledGap, originX, originY } = layout;
-    const bleedPt = Math.min(mmToPt(1), scaledGap / 2);
+    const bleedPt = mmToPt(2);
+
+    for (let slotIndex = 0; slotIndex < cardsPerPage; slotIndex += 1) {
+      const slot = pageConfig.slots[slotIndex];
+      if (!slot || !slot.card) continue;
+
+      const row = Math.floor(slotIndex / gridSize);
+      const col = slotIndex % gridSize;
+      const x = originX + col * (scaledWidth + scaledGap);
+      const y = originY + (gridSize - row - 1) * (scaledHeight + scaledGap);
+
+      drawCardBackground(page, {
+        x: x - bleedPt,
+        y: y - bleedPt,
+        width: scaledWidth + bleedPt * 2,
+        height: scaledHeight + bleedPt * 2,
+        color: backgroundColor,
+      });
+    }
 
     for (let slotIndex = 0; slotIndex < cardsPerPage; slotIndex += 1) {
       const row = Math.floor(slotIndex / gridSize);
@@ -97,14 +115,6 @@ async function buildPdf({
 
       const slot = pageConfig.slots[slotIndex];
       if (!slot || !slot.card) continue;
-
-      drawCardBackground(page, {
-        x: x - bleedPt,
-        y: y - bleedPt,
-        width: scaledWidth + bleedPt * 2,
-        height: scaledHeight + bleedPt * 2,
-        color: backgroundColor,
-      });
 
       const cardRef = slot.card;
       try {

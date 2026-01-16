@@ -53,7 +53,25 @@ async function buildPdf({
     const page = pdfDoc.addPage([A4_WIDTH_PT, A4_HEIGHT_PT]);
 
     const { scaledWidth, scaledHeight, scaledGap, originX, originY } = layout;
-    const bleedPt = Math.min(mmToPt(1), scaledGap / 2);
+    const bleedPt = mmToPt(2);
+
+    for (let slotIndex = 0; slotIndex < cardsPerPage; slotIndex++) {
+      const slot = pageConfig.slots[slotIndex];
+      if (!slot || !slot.card) continue;
+
+      const row = Math.floor(slotIndex / gridSize);
+      const col = slotIndex % gridSize;
+      const x = originX + col * (scaledWidth + scaledGap);
+      const y = originY + (gridSize - row - 1) * (scaledHeight + scaledGap);
+
+      drawCardBackground(page, {
+        x: x - bleedPt,
+        y: y - bleedPt,
+        width: scaledWidth + bleedPt * 2,
+        height: scaledHeight + bleedPt * 2,
+        color: cardBackgroundColor,
+      });
+    }
 
     for (let slotIndex = 0; slotIndex < cardsPerPage; slotIndex++) {
       const row = Math.floor(slotIndex / gridSize);
@@ -67,13 +85,6 @@ async function buildPdf({
       const card = slot.card && slot.card.card ? slot.card.card : slot.card;
       if (!card) continue;
 
-      drawCardBackground(page, {
-        x: x - bleedPt,
-        y: y - bleedPt,
-        width: scaledWidth + bleedPt * 2,
-        height: scaledHeight + bleedPt * 2,
-        color: cardBackgroundColor,
-      });
       const imagePath = await ensureCardImage(card, cacheDir, face, { face: slot.face });
       const embedded = await embedImage(pdfDoc, imagePath, imageCache);
       drawCardImage(page, embedded, {
