@@ -34,19 +34,22 @@ async function resolveCardImageSource({ card, imageSrc, face }, options = {}) {
   const explicit = typeof imageSrc === 'string' ? imageSrc.trim() : '';
   if (explicit) return resolveImageUrl(explicit, baseUrl, { label });
 
-  const primary = typeof card?.imagesrc === 'string' ? card.imagesrc.trim() : '';
-  if (primary) return resolveImageUrl(primary, baseUrl, { label });
-
   const code = card?.code != null ? String(card.code).trim() : '';
   if (!code) return null;
 
+  // Prefer Merlin's mirror when available; it tends to have higher-resolution images.
   if (fallbackImageCache.has(code)) {
     return fallbackImageCache.get(code);
   }
 
   const resolved = await resolveMerlinFallbackImageUrl(code, fallbackBaseUrl);
   fallbackImageCache.set(code, resolved);
-  return resolved;
+  if (resolved) return resolved;
+
+  const primary = typeof card?.imagesrc === 'string' ? card.imagesrc.trim() : '';
+  if (primary) return resolveImageUrl(primary, baseUrl, { label });
+
+  return null;
 }
 
 async function resolveMerlinFallbackImageUrl(code, fallbackBaseUrl) {
@@ -91,16 +94,30 @@ async function ensureCardImage({ card, imageSrc, face }, cacheDir, options = {})
   if (!url) {
     throw new MissingCardImageSourceError(formatCardLabel(card, face));
   }
-  const urlPath = new URL(url).pathname;
+  const parsedUrl = new URL(url);
+  const urlPath = parsedUrl.pathname;
   const basename = path.basename(urlPath);
   const ext = (path.extname(basename) || '.png').toLowerCase();
   const key = basename.replace(new RegExp(`${escapeRegExp(ext)}$`), '') || sanitizeFileName(card?.code) || 'card';
   const identifier = sanitizeFileName(card?.name || key);
-  const fileName = `${identifier || 'card'}-${key}${ext}`;
+  const source = sanitizeFileName(parsedUrl.host) || 'unknown-source';
+  const fileName = `${identifier || 'card'}-${key}-${source}${ext}`;
   const filePath = path.join(cacheDir, fileName);
 
   if (await fileExists(filePath)) {
     return filePath;
+  }
+
+  // Backward compat: older cache keys omitted the source host.
+  const legacyFileName = `${identifier || 'card'}-${key}${ext}`;
+  const legacyFilePath = path.join(cacheDir, legacyFileName);
+  if (await fileExists(legacyFilePath)) {
+    try {
+      await fs.promises.rename(legacyFilePath, filePath);
+      return filePath;
+    } catch (_) {
+      return legacyFilePath;
+    }
   }
 
   const response = await fetch(url);

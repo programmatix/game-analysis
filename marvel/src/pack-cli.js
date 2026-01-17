@@ -463,7 +463,7 @@ function canonicalizeByDuplicateCode(packCards) {
 function canonicalizeByFaceVariants(packCards) {
   const cards = Array.isArray(packCards) ? packCards : [];
 
-  const variantsByRoot = new Map(); // root -> { hasA: bool, hasBase: bool }
+  const variantsByRoot = new Map(); // root -> { hasA: bool, hasB: bool, hasBase: bool }
   for (const card of cards) {
     const code = String(card?.code || '').trim();
     const match = /^(\d+)([a-z]?)$/i.exec(code);
@@ -472,14 +472,14 @@ function canonicalizeByFaceVariants(packCards) {
     const suffix = match[2].toLowerCase();
     if (suffix !== '' && suffix !== 'a' && suffix !== 'b') continue;
 
-    const entry = variantsByRoot.get(root) || { hasA: false, hasBase: false };
+    const entry = variantsByRoot.get(root) || { hasA: false, hasB: false, hasBase: false };
     if (suffix === 'a') entry.hasA = true;
+    if (suffix === 'b') entry.hasB = true;
     if (suffix === '') entry.hasBase = true;
     variantsByRoot.set(root, entry);
   }
 
   const out = [];
-  const keptAForRoot = new Set();
   for (const card of cards) {
     const code = String(card?.code || '').trim();
     const match = /^(\d+)([a-z]?)$/i.exec(code);
@@ -491,24 +491,8 @@ function canonicalizeByFaceVariants(packCards) {
     const root = match[1];
     const suffix = match[2].toLowerCase();
     const variants = variantsByRoot.get(root);
-    const shouldPreferA = Boolean(variants?.hasA && variants?.hasBase);
-
-    if (!shouldPreferA) {
-      out.push(card);
-      continue;
-    }
-
-    if (suffix === 'a') {
-      if (keptAForRoot.has(root)) continue;
-      keptAForRoot.add(root);
-      out.push(card);
-      continue;
-    }
-
-    if (suffix === '' || suffix === 'b') {
-      continue;
-    }
-
+    const shouldDropBase = Boolean(variants?.hasBase && (variants?.hasA || variants?.hasB));
+    if (shouldDropBase && suffix === '') continue;
     out.push(card);
   }
 

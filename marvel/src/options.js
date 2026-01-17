@@ -20,7 +20,7 @@ function parseCliOptions() {
     .option('--include-backs', 'Include card backs for duplex printing (adds back pages and flips each row)', false)
     .option(
       '--fallback-image-base-url <url>',
-      'Fallback base URL for card images when MarvelCDB has no imagesrc',
+      'Preferred fallback base URL for card images (used when available)',
       DEFAULT_FALLBACK_IMAGE_BASE_URL,
     )
     .option('--grid-size <number>', 'Grid size (NxN)', '3')

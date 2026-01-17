@@ -1,6 +1,6 @@
 ## Marvel Champions CLI
 
-Tools to parse Marvel Champions deck lists, annotate them with per-card notes, and create printable proxy PDFs. Card metadata and images come from the public MarvelCDB API (including encounter/scenario cards) and are cached locally.
+Tools to parse Marvel Champions deck lists, annotate them with per-card notes, and create printable proxy PDFs. Card metadata comes from the public MarvelCDB API (including encounter/scenario cards); card images prefer Merlin’s mirror when available and are cached locally.
 
 ## Decklist format
 
@@ -107,4 +107,4 @@ npx marvel-pack next_evol --kind scenario --set juggernaut
 
 When `--kind scenario` is used with a villain set (e.g. `--set magneto_villain`), `marvel-pack` also includes that villain’s recommended modular set by default. Use `--no-recommended-modular` to disable.
 
-Some double-sided cards exist in the data as both `[12345]` and `[12345a]/[12345b]`; `marvel-pack` prefers the `a` code to avoid listing the same physical card multiple times.
+Some double-sided cards exist in the data as both `[12345]` and `[12345a]/[12345b]`; `marvel-pack` drops the base `[12345]` form and keeps the `a`/`b` forms to avoid listing the same physical card multiple times.
