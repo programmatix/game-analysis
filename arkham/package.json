@@ -10,7 +10,8 @@
     "arkham-hand-sim": "src/hand-sim-cli.js",
     "arkham-hand-sample": "src/hand-sample-cli.js",
     "arkham-annotate": "src/annotate-cli.js",
-    "arkham-search": "src/search-cli.js"
+    "arkham-search": "src/search-cli.js",
+    "arkham-gator": "src/gator-cli.js"
   },
   "type": "commonjs",
   "scripts": {

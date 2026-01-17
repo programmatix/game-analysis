@@ -67,6 +67,7 @@ async function main() {
     deckName: options.deckName,
     face: options.face,
     cardIndex,
+    duplexBacks: options.includeBacks,
   });
 
   await fs.promises.writeFile(options.outputPath, pdfBytes);

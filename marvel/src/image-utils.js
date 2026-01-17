@@ -94,6 +94,8 @@ async function ensureCardImage({ card, imageSrc, face }, cacheDir, options = {})
   if (!url) {
     throw new MissingCardImageSourceError(formatCardLabel(card, face));
   }
+  const baseUrl = options.baseUrl || DEFAULT_BASE_URL;
+  const fallbackBaseUrl = options.fallbackImageBaseUrl || DEFAULT_FALLBACK_IMAGE_BASE_URL;
   const parsedUrl = new URL(url);
   const urlPath = parsedUrl.pathname;
   const basename = path.basename(urlPath);
@@ -104,19 +106,77 @@ async function ensureCardImage({ card, imageSrc, face }, cacheDir, options = {})
   const fileName = `${identifier || 'card'}-${key}-${source}${ext}`;
   const filePath = path.join(cacheDir, fileName);
 
+  const extCandidates = ['.png', '.jpg', '.jpeg'];
+  const legacyCandidates = extCandidates.map(extension => (
+    path.join(cacheDir, `${identifier || 'card'}-${key}${extension}`)
+  ));
+
+  let baseHost = null;
+  try {
+    baseHost = new URL(baseUrl).host;
+  } catch (_) {
+    baseHost = null;
+  }
+
+  let fallbackHost = null;
+  try {
+    fallbackHost = new URL(fallbackBaseUrl).host;
+  } catch (_) {
+    fallbackHost = null;
+  }
+
+  const primaryCandidates = baseHost
+    ? extCandidates.map(extension => (
+      path.join(cacheDir, `${identifier || 'card'}-${key}-${sanitizeFileName(baseHost)}${extension}`)
+    ))
+    : [];
+
+  const shouldPreferFallback = Boolean(fallbackHost && parsedUrl.host === fallbackHost);
+
+  const deleteIfExists = async candidatePath => {
+    try {
+      if (await fileExists(candidatePath)) {
+        await fs.promises.unlink(candidatePath);
+      }
+    } catch (_) {
+      // ignore cleanup failures
+    }
+  };
+
+  const cleanupLegacyAndPrimary = async preservePath => {
+    for (const candidatePath of legacyCandidates) {
+      if (candidatePath !== preservePath) await deleteIfExists(candidatePath);
+    }
+    for (const candidatePath of primaryCandidates) {
+      if (candidatePath !== preservePath) await deleteIfExists(candidatePath);
+    }
+  };
+
   if (await fileExists(filePath)) {
+    if (shouldPreferFallback) {
+      await cleanupLegacyAndPrimary(filePath);
+    }
     return filePath;
   }
 
-  // Backward compat: older cache keys omitted the source host.
-  const legacyFileName = `${identifier || 'card'}-${key}${ext}`;
-  const legacyFilePath = path.join(cacheDir, legacyFileName);
-  if (await fileExists(legacyFilePath)) {
+  if (shouldPreferFallback) {
+    // If we have an old MarvelCDB image (or unlabeled legacy), keep it as a last-resort fallback
+    // but prefer downloading Merlin's copy when available.
+    const fallbackLocal = (await firstExistingPath([...legacyCandidates, ...primaryCandidates])) || null;
+
     try {
-      await fs.promises.rename(legacyFilePath, filePath);
+      const response = await fetch(url);
+      if (!response.ok) {
+        const label = card?.name || card?.code || basename || url;
+        throw new Error(`Failed to download image for "${label}": ${response.status} ${response.statusText}`);
+      }
+      const buffer = Buffer.from(await response.arrayBuffer());
+      await fs.promises.writeFile(filePath, buffer);
+      await cleanupLegacyAndPrimary(filePath);
       return filePath;
-    } catch (_) {
-      return legacyFilePath;
+    } catch (err) {
+      if (fallbackLocal) return fallbackLocal;
+      throw err;
     }
   }
 
@@ -128,6 +188,13 @@ async function ensureCardImage({ card, imageSrc, face }, cacheDir, options = {})
   const buffer = Buffer.from(await response.arrayBuffer());
   await fs.promises.writeFile(filePath, buffer);
   return filePath;
+}
+
+async function firstExistingPath(paths) {
+  for (const candidatePath of Array.isArray(paths) ? paths : []) {
+    if (await fileExists(candidatePath)) return candidatePath;
+  }
+  return null;
 }
 
 function formatCardLabel(card, face) {

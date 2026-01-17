@@ -47,6 +47,7 @@ async function buildPdf({
   deckName,
   face,
   cardIndex,
+  duplexBacks = false,
 }) {
   const pdfDoc = await PDFDocument.create();
   const fonts = {
@@ -59,8 +60,9 @@ async function buildPdf({
   const cardsPerPage = gridSize * gridSize;
   const gapPt = mmToPt(GAP_BETWEEN_CARDS_MM);
   const imageCache = new Map();
-  const paddedCards = applyProxyPageBreaks(cards, cardsPerPage);
-  const cardEntries = paddedCards.map(card => (card ? resolveCardFaces(normalizeDeckCard(card), face, cardIndex) : null));
+  const expandedCards = expandCards(cards, face, cardIndex, { duplexBacks });
+  const paddedCards = applyProxyPageBreaks(expandedCards, cardsPerPage);
+  const cardEntries = paddedCards.map(card => (card ? card : null));
   const pagePlan = buildPagePlan(cardEntries, cardsPerPage);
   const totalPages = pagePlan.length || 1;
   const layout = computeGridLayout({
@@ -143,6 +145,36 @@ async function buildPdf({
   }
 
   return pdfDoc.save();
+}
+
+function expandCards(cards, defaultFace, cardIndex, { duplexBacks } = {}) {
+  const output = [];
+  const shouldDuplex = Boolean(duplexBacks);
+
+  for (const item of Array.isArray(cards) ? cards : []) {
+    if (!item) {
+      output.push(null);
+      continue;
+    }
+
+    if (item.proxyPageBreak) {
+      output.push({ proxyPageBreak: true });
+      continue;
+    }
+
+    const resolved = resolveCardFaces(normalizeDeckCard(item), defaultFace, cardIndex);
+    if (shouldDuplex) {
+      output.push(resolved);
+      continue;
+    }
+
+    output.push({ card: resolved.card, face: resolved.face });
+    if (resolved.backFace) {
+      output.push({ card: resolved.backCard || resolved.card, face: resolved.backFace });
+    }
+  }
+
+  return output;
 }
 
 function normalizeDeckCard(cardOrEntry) {

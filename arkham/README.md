@@ -35,7 +35,7 @@ Tag Arkham-specific utility in square brackets so the sampler CLI can track it:
 - `[ignorefordecklimit]` excludes the card from deck-size warnings (permanent cards are treated this way automatically).
 - `[weakness]` (or `[basicweakness]`) marks a weakness; opening hand redraws them and shuffles them back in.
 - `[skipproxy]` keeps the card in the list but omits it from the proxy PDF (no image download).
-- `[skipback]` prints only the front of a card and omits its back face from the proxy PDF.
+- `[skipback]` prints only the requested face and omits the opposite face from the proxy PDF.
 
 Example: `2 emergency cache[01088] [resources:3]`
 
@@ -47,6 +47,8 @@ npx arkham-proxy --input deck.txt --name "Roland Solo"
 ```
 
 Proxy PDFs include a 2mm black bleed beyond the cut marks.
+
+Double-sided cards render both faces by default as normal cards (no reverse pages). Use `--include-backs` to generate reverse pages for duplex printing alignment.
 
 ### Deck annotator
 
@@ -103,6 +105,18 @@ Useful flags:
 - `--trait`, `--slot`, `--type`, `--pack`, `--name`, `--text` filter on other card fields
 - `--unique` restricts to unique cards; `--exclude-weaknesses` removes weaknesses
 - `--sort` controls ordering (comma-separated fields), `--limit` caps how many lines print
+
+### Investigator ("gator") special cards
+
+Generate a decklist containing an investigator plus their signature/special cards (good for quickly proxying/collecting those cards):
+
+```bash
+# One investigator by name (use --code if ambiguous)
+npx arkham-gator --name "Lucius"
+
+# All investigators of an aspect (primary faction)
+npx arkham-gator --faction seeker > seeker-gators.txt
+```
 
 ### Required sets
 

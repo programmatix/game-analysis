@@ -22,6 +22,7 @@ function parseCliOptions() {
     .option('--cut-mark-length-mm <number>', 'Length of cut marks in millimetres', '5')
     .option('--scale <number>', 'Scale factor for card size (default: 0.99, i.e. 99% for tight sleeves)', '0.99')
     .option('--face <a|b>', 'Card face to render when the code lacks a side', 'a')
+    .option('--include-backs', 'Include back faces on separate reverse pages (double-sided print alignment)', false)
     .option('--name <text>', 'Deck name for the PDF filename and footer', 'deck')
     .parse(process.argv);
 
@@ -46,6 +47,7 @@ function parseCliOptions() {
     cutMarkLengthPt,
     scaleFactor,
     face,
+    includeBacks: Boolean(options.includeBacks),
     deckName,
     outputPath,
     expectedDeckSize,
