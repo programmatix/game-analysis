@@ -4,6 +4,7 @@ const path = require('path');
 const { Command } = require('commander');
 const { normalizeForSearch } = require('../../shared/text-utils');
 const { loadCardDatabase } = require('./card-data');
+const { getRecommendedModularSetCodesForVillainSet } = require('./pack-recommendations');
 
 const HERO_KIT_TYPE_CODES = new Set(['hero', 'alter_ego', 'obligation'].map(normalizeForSearch));
 const PLAYER_TYPE_CODES = new Set(
@@ -50,6 +51,10 @@ async function main() {
     .option('--no-codes', 'Omit [code] suffixes in output')
     .option('--list-packs', 'List all packs found in the MarvelCDB data and exit', false)
     .option('--list-sets', 'List all card sets in the resolved pack and exit', false)
+    .option(
+      '--no-recommended-modular',
+      'When outputting a scenario set, do not auto-include its recommended modular encounter set(s)'
+    )
     .option('--data-cache <file>', 'Where to cache MarvelCDB cards JSON', path.join('.cache', 'marvelcdb-cards.json'))
     .option('--refresh-data', 'Re-download the MarvelCDB cards JSON into the cache', false)
     .option('--json', 'Output JSON instead of a deck list', false)
@@ -114,7 +119,12 @@ async function main() {
   }
 
   const setQueries = Array.isArray(options.set) ? options.set.map(s => String(s || '').trim()).filter(Boolean) : [];
-  const setFiltered = setQueries.length ? filterPackCardsBySets(kindFiltered, setQueries, sets) : kindFiltered;
+  const setFiltered = setQueries.length
+    ? filterPackCardsBySets(kindFiltered, setQueries, sets, {
+        includeRecommendedModular: Boolean(options.recommendedModular),
+        kind,
+      })
+    : kindFiltered;
   if (setQueries.length && setFiltered.length === 0) {
     throw new Error(
       `No cards matched the requested set(s) (${setQueries.map(s => JSON.stringify(s)).join(', ')}) in pack "${pack.code}".`
@@ -122,7 +132,8 @@ async function main() {
   }
 
   const canonical = canonicalizeByDuplicateCode(setFiltered);
-  const entries = buildDeckEntries(canonical, { includeCodes: Boolean(options.codes) });
+  const faceCanonical = canonicalizeByFaceVariants(canonical);
+  const entries = buildDeckEntries(faceCanonical, { includeCodes: Boolean(options.codes) });
 
   const outputText = options.json
     ? JSON.stringify({ pack: { code: pack.code, name: pack.name }, kind, entries }, null, 2)
@@ -254,7 +265,31 @@ function resolveSet(query, sets) {
   throw new Error(`Set "${query}" is ambiguous; choose one of:\n${details}`);
 }
 
-function filterPackCardsBySets(packCards, setQueries, sets) {
+function filterPackCardsBySets(packCards, setQueries, sets, options = {}) {
+  const kind = String(options.kind || '');
+  const includeRecommendedModular = options.includeRecommendedModular !== false;
+
+  const selected = resolveSetQueries(setQueries, sets);
+  const expanded =
+    includeRecommendedModular && kind === 'scenario'
+      ? addRecommendedModularSets(selected, sets)
+      : selected;
+
+  const out = [];
+  const seenCardCode = new Set();
+  for (const set of expanded) {
+    for (const card of Array.isArray(set.cards) ? set.cards : []) {
+      const code = String(card?.code || '').trim();
+      if (!code || seenCardCode.has(code)) continue;
+      seenCardCode.add(code);
+      out.push(card);
+    }
+  }
+
+  return out;
+}
+
+function resolveSetQueries(setQueries, sets) {
   const selected = [];
   const seenSetKey = new Set();
   for (const query of Array.isArray(setQueries) ? setQueries : []) {
@@ -265,14 +300,45 @@ function filterPackCardsBySets(packCards, setQueries, sets) {
     selected.push(resolved);
   }
 
+  return selected;
+}
+
+function getSetTypeCode(set) {
+  const first = Array.isArray(set?.cards) ? set.cards[0] : null;
+  return normalizeForSearch(first?.card_set_type_name_code || '');
+}
+
+function addRecommendedModularSets(selectedSets, sets) {
   const out = [];
-  const seenCardCode = new Set();
-  for (const set of selected) {
-    for (const card of Array.isArray(set.cards) ? set.cards : []) {
-      const code = String(card?.code || '').trim();
-      if (!code || seenCardCode.has(code)) continue;
-      seenCardCode.add(code);
-      out.push(card);
+  const selectedCodes = new Set(
+    (Array.isArray(selectedSets) ? selectedSets : [])
+      .map(set => normalizeForSearch(set?.code || ''))
+      .filter(Boolean)
+  );
+
+  const hasAnyModular = (Array.isArray(selectedSets) ? selectedSets : []).some(set => getSetTypeCode(set) === 'modular');
+
+  for (const set of Array.isArray(selectedSets) ? selectedSets : []) {
+    out.push(set);
+
+    // If the user explicitly requested a modular set, don't auto-add any.
+    if (hasAnyModular) continue;
+
+    if (getSetTypeCode(set) !== 'villain') continue;
+
+    const setCode = normalizeForSearch(set?.code || '');
+    for (const recommendedCode of getRecommendedModularSetCodesForVillainSet(setCode)) {
+      const normalizedRecommended = normalizeForSearch(recommendedCode);
+      if (!normalizedRecommended || selectedCodes.has(normalizedRecommended)) continue;
+
+      try {
+        const resolved = resolveSet(recommendedCode, sets);
+        out.push(resolved);
+        selectedCodes.add(normalizedRecommended);
+      } catch (err) {
+        // Ignore missing/ambiguous recommendations; they are curated and should
+        // not break normal pack output if the upstream data changes.
+      }
     }
   }
 
@@ -390,6 +456,61 @@ function canonicalizeByDuplicateCode(packCards) {
     if (nameA > nameB) return 1;
     return String(a?.code || '').localeCompare(String(b?.code || ''), 'en', { numeric: true });
   });
+
+  return out;
+}
+
+function canonicalizeByFaceVariants(packCards) {
+  const cards = Array.isArray(packCards) ? packCards : [];
+
+  const variantsByRoot = new Map(); // root -> { hasA: bool, hasBase: bool }
+  for (const card of cards) {
+    const code = String(card?.code || '').trim();
+    const match = /^(\d+)([a-z]?)$/i.exec(code);
+    if (!match) continue;
+    const root = match[1];
+    const suffix = match[2].toLowerCase();
+    if (suffix !== '' && suffix !== 'a' && suffix !== 'b') continue;
+
+    const entry = variantsByRoot.get(root) || { hasA: false, hasBase: false };
+    if (suffix === 'a') entry.hasA = true;
+    if (suffix === '') entry.hasBase = true;
+    variantsByRoot.set(root, entry);
+  }
+
+  const out = [];
+  const keptAForRoot = new Set();
+  for (const card of cards) {
+    const code = String(card?.code || '').trim();
+    const match = /^(\d+)([a-z]?)$/i.exec(code);
+    if (!match) {
+      out.push(card);
+      continue;
+    }
+
+    const root = match[1];
+    const suffix = match[2].toLowerCase();
+    const variants = variantsByRoot.get(root);
+    const shouldPreferA = Boolean(variants?.hasA && variants?.hasBase);
+
+    if (!shouldPreferA) {
+      out.push(card);
+      continue;
+    }
+
+    if (suffix === 'a') {
+      if (keptAForRoot.has(root)) continue;
+      keptAForRoot.add(root);
+      out.push(card);
+      continue;
+    }
+
+    if (suffix === '' || suffix === 'b') {
+      continue;
+    }
+
+    out.push(card);
+  }
 
   return out;
 }

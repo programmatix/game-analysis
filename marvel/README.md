@@ -104,3 +104,7 @@ To output a specific encounter/module set within a pack:
 npx marvel-pack "NeXt Evolution" --list-sets
 npx marvel-pack next_evol --kind scenario --set juggernaut
 ```
+
+When `--kind scenario` is used with a villain set (e.g. `--set magneto_villain`), `marvel-pack` also includes that villain’s recommended modular set by default. Use `--no-recommended-modular` to disable.
+
+Some double-sided cards exist in the data as both `[12345]` and `[12345a]/[12345b]`; `marvel-pack` prefers the `a` code to avoid listing the same physical card multiple times.
