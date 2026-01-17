@@ -275,6 +275,7 @@ function buildInvestigatorSection(investigator, cards, codeIndex) {
   }
 
   lines.push(`1 ${formatInvestigatorName(investigator)}[${investigator?.code || ''}] [ignorefordecklimit]`);
+  lines.push(...formatInvestigatorSummaryComments(investigator, problems));
 
   for (const card of uniqueSpecialCards) {
     const count = requiredCopiesForSpecialCard(card);
@@ -285,6 +286,63 @@ function buildInvestigatorSection(investigator, cards, codeIndex) {
   }
 
   return { lines, sectionProblems: problems };
+}
+
+function formatInvestigatorSummaryComments(investigator, problems) {
+  const comments = [];
+  const health = maybeNumber(investigator?.health);
+  const sanity = maybeNumber(investigator?.sanity);
+  const agility = maybeNumber(investigator?.skill_agility);
+  const combat = maybeNumber(investigator?.skill_combat);
+  const intellect = maybeNumber(investigator?.skill_intellect);
+  const willpower = maybeNumber(investigator?.skill_willpower);
+
+  const missing = [];
+  if (health === null) missing.push('health');
+  if (sanity === null) missing.push('sanity');
+  if (agility === null) missing.push('skill_agility');
+  if (combat === null) missing.push('skill_combat');
+  if (intellect === null) missing.push('skill_intellect');
+  if (willpower === null) missing.push('skill_willpower');
+  if (missing.length) {
+    problems.push(`Missing investigator fields: ${missing.join(', ')}`);
+  }
+
+  const stats = [
+    health === null ? '?' : String(health),
+    sanity === null ? '?' : String(sanity),
+    agility === null ? '?' : String(agility),
+    combat === null ? '?' : String(combat),
+    intellect === null ? '?' : String(intellect),
+    willpower === null ? '?' : String(willpower),
+  ];
+
+  const rawText = typeof investigator?.text === 'string' ? investigator.text : '';
+  const mainText = stripHtmlAndNormalizeWhitespace(rawText);
+
+  const statLabel = `Health ${stats[0]}, Sanity ${stats[1]}, Agi ${stats[2]}, Com ${stats[3]}, Int ${stats[4]}, Wil ${stats[5]}`;
+  if (mainText) {
+    comments.push(`//? ${statLabel} — ${mainText}`);
+  } else {
+    comments.push(`//? ${statLabel}`);
+  }
+
+  return comments;
+}
+
+function maybeNumber(value) {
+  if (value === null || value === undefined) return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return null;
+  return parsed;
+}
+
+function stripHtmlAndNormalizeWhitespace(text) {
+  if (!text) return '';
+  return String(text)
+    .replace(/<[^>]*>/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function requiredCopiesForSpecialCard(card) {

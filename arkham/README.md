@@ -116,6 +116,7 @@ npx arkham-gator --name "Lucius"
 
 # All investigators of an aspect (primary faction)
 npx arkham-gator --faction seeker > seeker-gators.txt
+
 ```
 
 ### Required sets
