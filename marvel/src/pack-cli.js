@@ -42,12 +42,43 @@ async function main() {
       'Only output hero-specific cards (signature + obligation + nemesis); ignores --kind',
       false
     )
+    .option(
+      '--set <set>',
+      'Only output cards from a specific card set within the pack (matches card_set_code or card_set_name); can be repeated',
+      (value, previous) => (Array.isArray(previous) ? previous.concat([value]) : [value])
+    )
     .option('--no-codes', 'Omit [code] suffixes in output')
     .option('--list-packs', 'List all packs found in the MarvelCDB data and exit', false)
+    .option('--list-sets', 'List all card sets in the resolved pack and exit', false)
     .option('--data-cache <file>', 'Where to cache MarvelCDB cards JSON', path.join('.cache', 'marvelcdb-cards.json'))
     .option('--refresh-data', 'Re-download the MarvelCDB cards JSON into the cache', false)
     .option('--json', 'Output JSON instead of a deck list', false)
-    .parse(process.argv);
+    .showHelpAfterError()
+    .showSuggestionAfterError()
+    .exitOverride();
+
+  try {
+    program.parse(process.argv);
+  } catch (err) {
+    const error = err instanceof Error ? err : new Error(String(err));
+    if (
+      error.code === 'commander.tooManyArguments' &&
+      Array.isArray(process.argv) &&
+      process.argv.includes('--')
+    ) {
+      console.error(
+        [
+          error.message,
+          '',
+          'Note: `--` ends option parsing, so everything after it is treated as extra positional arguments.',
+          'Try:',
+          '  npx marvel-pack next_evol --kind scenario --set juggernaut',
+        ].join('\n')
+      );
+      process.exit(1);
+    }
+    throw err;
+  }
 
   const options = program.opts();
 
@@ -69,17 +100,28 @@ async function main() {
   }
 
   const pack = resolvePack(packQuery, packs);
+  const sets = buildSetIndex(pack.cards);
   const heroSpecific = Boolean(options.heroSpecific);
-  const kind = heroSpecific ? 'hero-specific' : 'all';
-  const filtered = heroSpecific
-    ? filterHeroSpecificPackCards(pack.cards)
-    : Array.isArray(pack.cards)
-      ? pack.cards.slice()
-      : [];
-  if (heroSpecific && filtered.length === 0) {
+  const kind = heroSpecific ? 'hero-specific' : normalizeKind(options.kind, pack.cards);
+  const kindFiltered = heroSpecific ? filterHeroSpecificPackCards(pack.cards) : filterPackCards(pack.cards, kind);
+  if (heroSpecific && kindFiltered.length === 0) {
     throw new Error(`No hero-specific cards were found in pack "${pack.code}" (${pack.name || 'unknown name'}).`);
   }
-  const canonical = canonicalizeByDuplicateCode(filtered);
+
+  if (options.listSets) {
+    process.stdout.write(`${formatSetList(sets)}\n`);
+    return;
+  }
+
+  const setQueries = Array.isArray(options.set) ? options.set.map(s => String(s || '').trim()).filter(Boolean) : [];
+  const setFiltered = setQueries.length ? filterPackCardsBySets(kindFiltered, setQueries, sets) : kindFiltered;
+  if (setQueries.length && setFiltered.length === 0) {
+    throw new Error(
+      `No cards matched the requested set(s) (${setQueries.map(s => JSON.stringify(s)).join(', ')}) in pack "${pack.code}".`
+    );
+  }
+
+  const canonical = canonicalizeByDuplicateCode(setFiltered);
   const entries = buildDeckEntries(canonical, { includeCodes: Boolean(options.codes) });
 
   const outputText = options.json
@@ -154,6 +196,87 @@ function filterHeroSpecificPackCards(cards) {
     const setName = normalizeForSearch(card?.card_set_name || '');
     return (setCode && setCode.includes('nemesis')) || (setName && setName.includes('nemesis'));
   });
+}
+
+function buildSetIndex(packCards) {
+  const sets = new Map();
+
+  for (const card of Array.isArray(packCards) ? packCards : []) {
+    const code = String(card?.card_set_code || '').trim();
+    const name = String(card?.card_set_name || '').trim();
+    if (!code && !name) continue;
+
+    const key = `${code}||${name}`;
+    const entry = sets.get(key) || { code, name, cards: [] };
+    if (!entry.code && code) entry.code = code;
+    if (!entry.name && name) entry.name = name;
+    entry.cards.push(card);
+    sets.set(key, entry);
+  }
+
+  return sets;
+}
+
+function resolveSet(query, sets) {
+  const normalizedQuery = normalizeForSearch(query);
+  if (!normalizedQuery) {
+    throw new Error('Set query is empty.');
+  }
+
+  const byCode = [];
+  const byNameExact = [];
+  const byNameIncludes = [];
+
+  for (const set of sets.values()) {
+    const setCode = normalizeForSearch(set.code);
+    const setName = normalizeForSearch(set.name);
+
+    if (setCode && setCode === normalizedQuery) byCode.push(set);
+    if (setName && setName === normalizedQuery) byNameExact.push(set);
+    if (setName && setName.includes(normalizedQuery)) byNameIncludes.push(set);
+  }
+
+  const candidates = byCode.length ? byCode : byNameExact.length ? byNameExact : byNameIncludes;
+  if (candidates.length === 1) return candidates[0];
+
+  if (candidates.length === 0) {
+    const suggestions = bySimilarity(normalizedQuery, Array.from(sets.values()));
+    const suggestionText = suggestions.length
+      ? `\n\nDid you mean:\n${suggestions.map(set => `- ${set.code || '(no code)'} — ${set.name || '(unknown name)'}`).join('\n')}`
+      : '';
+    throw new Error(`No card set matched "${query}".${suggestionText}`);
+  }
+
+  const details = candidates
+    .slice(0, 20)
+    .map(set => `- ${set.code || '(no code)'} — ${set.name || '(unknown name)'}`)
+    .join('\n');
+  throw new Error(`Set "${query}" is ambiguous; choose one of:\n${details}`);
+}
+
+function filterPackCardsBySets(packCards, setQueries, sets) {
+  const selected = [];
+  const seenSetKey = new Set();
+  for (const query of Array.isArray(setQueries) ? setQueries : []) {
+    const resolved = resolveSet(query, sets);
+    const key = `${String(resolved.code || '').trim()}||${String(resolved.name || '').trim()}`;
+    if (seenSetKey.has(key)) continue;
+    seenSetKey.add(key);
+    selected.push(resolved);
+  }
+
+  const out = [];
+  const seenCardCode = new Set();
+  for (const set of selected) {
+    for (const card of Array.isArray(set.cards) ? set.cards : []) {
+      const code = String(card?.code || '').trim();
+      if (!code || seenCardCode.has(code)) continue;
+      seenCardCode.add(code);
+      out.push(card);
+    }
+  }
+
+  return out;
 }
 
 function buildPackIndex(cards) {
@@ -314,6 +437,26 @@ function formatPackList(packs) {
         counts.scenario ? `scenario:${counts.scenario}` : null,
       ].filter(Boolean);
       return parts.join(' | ');
+    })
+    .join('\n');
+}
+
+function formatSetList(sets) {
+  const list = Array.from(sets.values());
+  list.sort((a, b) => {
+    const nameA = normalizeForSearch(a.name || '');
+    const nameB = normalizeForSearch(b.name || '');
+    if (nameA < nameB) return -1;
+    if (nameA > nameB) return 1;
+    return normalizeForSearch(a.code).localeCompare(normalizeForSearch(b.code), 'en', { numeric: true });
+  });
+
+  return list
+    .map(set => {
+      const code = String(set.code || '').trim();
+      const name = String(set.name || '').trim();
+      const count = Array.isArray(set.cards) ? set.cards.length : 0;
+      return `${code || '(no code)'} — ${name || '(unknown name)'} | cards:${count}`;
     })
     .join('\n');
 }
