@@ -13,7 +13,7 @@
   },
   "type": "commonjs",
   "scripts": {
-    "test": "echo \"No tests defined\" && exit 0"
+    "test": "node --test \"src/*.test.js\""
   },
   "dependencies": {
     "commander": "^14.0.2",

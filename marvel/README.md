@@ -75,9 +75,9 @@ Download a published decklist (by id or URL) and emit a normalized list in this 
 
 ```bash
 npx marvel-download 40979 | npx marvel-proxy
-```
+npx marvel-download 40979 --no-hero | npx marvel-proxy
 
-By default, this also appends the hero’s encounter cards (obligation + nemesis set). Use `--no-hero-encounter` to disable.
+```
 
 To output *only* the hero’s encounter cards (for printing just the “bad” stuff):
 

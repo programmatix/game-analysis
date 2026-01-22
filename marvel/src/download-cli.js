@@ -17,6 +17,7 @@ async function main() {
     .option('--data-cache <file>', 'Where to cache MarvelCDB cards JSON', path.join('.cache', 'marvelcdb-cards.json'))
     .option('--refresh-data', 'Re-download the MarvelCDB cards JSON into the cache', false)
     .option('--face <a|b>', 'Default face for numeric codes like [01001]', 'a')
+    .option('--no-hero', 'Do not include hero, alter-ego, or signature cards (still controlled separately from hero encounter cards)')
     .option('--no-hero-encounter', 'Do not include the hero’s obligation/nemesis encounter cards')
     .option('--only-hero-encounter', 'Only output the hero’s obligation/nemesis encounter cards')
     .option('--no-header', 'Do not include source header comments')
@@ -35,12 +36,14 @@ async function main() {
   const { lookup, cardIndex } = buildCardLookup(cards);
 
   const defaultFace = String(options.face || 'a').toLowerCase() === 'b' ? 'b' : 'a';
+  const includeHeroKit = Boolean(options.hero);
   const onlyHeroEncounter = Boolean(options.onlyHeroEncounter);
   const includeHeroEncounter = onlyHeroEncounter || Boolean(options.heroEncounter);
   const { lines, warnings } = buildDecklistLines(deck, lookup, cardIndex, {
     defaultFace,
     sourceUrl,
     includeHeader: Boolean(options.header),
+    includeHeroKit,
     includeHeroEncounter,
     onlyHeroEncounter,
   });
@@ -130,6 +133,7 @@ async function fetchMarvelCdbDeck(id, baseUrl) {
 function buildDecklistLines(deck, lookup, cardIndex, options = {}) {
   const defaultFace = options.defaultFace || 'a';
   const includeHeader = Boolean(options.includeHeader);
+  const includeHeroKit = options.includeHeroKit !== false;
   const includeHeroEncounter = Boolean(options.includeHeroEncounter);
   const onlyHeroEncounter = Boolean(options.onlyHeroEncounter);
   const sourceUrl = typeof options.sourceUrl === 'string' ? options.sourceUrl : null;
@@ -145,6 +149,11 @@ function buildDecklistLines(deck, lookup, cardIndex, options = {}) {
   }
 
   const entries = onlyHeroEncounter ? [] : collectDeckEntries(deck);
+  if (!onlyHeroEncounter && !includeHeroKit) {
+    const filtered = filterHeroKitEntries(entries, deck, lookup, cardIndex, { defaultFace, warnings });
+    entries.length = 0;
+    entries.push(...filtered);
+  }
   if (!onlyHeroEncounter) {
     appendLinkedEntries(entries, lookup, cardIndex, { defaultFace, warnings });
   }
@@ -171,6 +180,60 @@ function buildDecklistLines(deck, lookup, cardIndex, options = {}) {
   }
 
   return { lines, warnings };
+}
+
+function filterHeroKitEntries(entries, deck, lookup, cardIndex, options = {}) {
+  const defaultFace = options.defaultFace || 'a';
+  const warnings = Array.isArray(options.warnings) ? options.warnings : [];
+
+  const heroCode = deck?.hero_code ? String(deck.hero_code).trim() : '';
+
+  let heroSetCode = '';
+  if (heroCode) {
+    try {
+      const heroCard = resolveCard({ code: heroCode }, lookup, cardIndex, { defaultFace });
+      heroSetCode = heroCard?.card_set_code ? String(heroCard.card_set_code).trim() : '';
+    } catch (err) {
+      warnings.push(
+        `Warning: Could not resolve hero code "${heroCode}" to filter hero kit cards: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
+  }
+
+  const out = [];
+  for (const entry of Array.isArray(entries) ? entries : []) {
+    const code = String(entry?.code || '').trim();
+    if (!code) continue;
+
+    let card;
+    try {
+      card = resolveCard({ code }, lookup, cardIndex, { defaultFace });
+    } catch (_err) {
+      out.push(entry);
+      continue;
+    }
+
+    const typeCode = card?.type_code ? String(card.type_code).trim().toLowerCase() : '';
+    if (typeCode === 'hero' || typeCode === 'alter_ego') {
+      continue;
+    }
+
+    const factionCode = card?.faction_code ? String(card.faction_code).trim().toLowerCase() : '';
+    if (factionCode === 'hero') {
+      continue;
+    }
+
+    const cardSetCode = card?.card_set_code ? String(card.card_set_code).trim() : '';
+    if (heroSetCode && cardSetCode === heroSetCode && typeCode !== 'obligation') {
+      continue;
+    }
+
+    out.push(entry);
+  }
+
+  return out;
 }
 
 function collectDeckEntries(deck) {
