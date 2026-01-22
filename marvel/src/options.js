@@ -26,6 +26,7 @@ function parseCliOptions() {
     .option('--grid-size <number>', 'Grid size (NxN)', '3')
     .option('--card-width-mm <number>', 'Card width in millimetres', '63.5')
     .option('--card-height-mm <number>', 'Card height in millimetres', '88.9')
+    .option('--corner-radius-mm <number>', 'Corner radius in millimetres (default: 3.2)', '3.2')
     .option('--cut-mark-length-mm <number>', 'Length of cut marks in millimetres', '5')
     .option('--scale <number>', 'Scale factor for card size (default: 0.97, i.e. 98% for tight sleeves)', '0.97')
     .option('--face <a|b>', 'Default face for numeric codes like [01001]', 'a')
@@ -37,6 +38,7 @@ function parseCliOptions() {
   const gridSize = parseGridSize(options.gridSize);
   const cardWidthPt = mmToPt(parsePositiveNumber('--card-width-mm', options.cardWidthMm));
   const cardHeightPt = mmToPt(parsePositiveNumber('--card-height-mm', options.cardHeightMm));
+  const cornerRadiusMm = parsePositiveNumber('--corner-radius-mm', options.cornerRadiusMm);
   const cutMarkLengthPt = mmToPt(parsePositiveNumber('--cut-mark-length-mm', options.cutMarkLengthMm));
   const scaleFactor = parseScaleFactor(options.scale);
   const expectedDeckSize = parseExpectedSize(options.expectedSize);
@@ -54,6 +56,7 @@ function parseCliOptions() {
     gridSize,
     cardWidthPt,
     cardHeightPt,
+    cornerRadiusMm,
     cutMarkLengthPt,
     scaleFactor,
     face,

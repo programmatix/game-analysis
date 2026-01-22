@@ -92,6 +92,7 @@ async function main() {
     cacheDir: options.cacheDir,
     cardWidthPt: options.cardWidthPt,
     cardHeightPt: options.cardHeightPt,
+    cornerRadiusMm: options.cornerRadiusMm,
     cutMarkLengthPt: options.cutMarkLengthPt,
     gridSize: options.gridSize,
     scaleFactor: options.scaleFactor,

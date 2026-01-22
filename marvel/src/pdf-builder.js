@@ -41,6 +41,7 @@ async function buildPdf({
   cacheDir,
   cardWidthPt,
   cardHeightPt,
+  cornerRadiusMm = 3.2,
   cutMarkLengthPt,
   gridSize,
   scaleFactor,
@@ -120,7 +121,8 @@ async function buildPdf({
       try {
         const imagePath = await ensureCardImage(cardRef, cacheDir, { baseUrl, fallbackImageBaseUrl });
         const embedded = await embedImage(pdfDoc, imagePath, imageCache);
-        drawCardImage(page, embedded, { x, y, width: scaledWidth, height: scaledHeight });
+        const cornerRadiusPt = mmToPt(cornerRadiusMm) * layout.scale;
+        drawCardImage(page, embedded, { x, y, width: scaledWidth, height: scaledHeight, cornerRadiusPt });
       } catch (err) {
         if (err instanceof MissingCardImageSourceError) {
           drawMissingImagePlaceholder(page, fonts, {
@@ -458,8 +460,8 @@ function fillSlots(entries, size, mapFn) {
   return slots;
 }
 
-function drawCardImage(page, embedded, { x, y, width, height }) {
-  const cornerRadius = Math.min(width, height) * 0.03;
+function drawCardImage(page, embedded, { x, y, width, height, cornerRadiusPt }) {
+  const cornerRadius = Number.isFinite(cornerRadiusPt) ? cornerRadiusPt : 0;
   applyRoundedRectClip(page, PDF_OPS, { x, y, width, height, radius: cornerRadius });
 
   const isLandscape = embedded.width > embedded.height;

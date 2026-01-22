@@ -31,6 +31,7 @@ Useful flags:
 
 - `--cache-dir` controls where images download (default: `.cache/marvel-card-art`).
 - `--data-cache` controls where the MarvelCDB card JSON is stored (default: `.cache/marvelcdb-cards.json`).
+- `--corner-radius-mm` controls the rounded-corner clip radius (default: `3.2`).
 - `--face a|b` controls the default face for numeric codes like `[01001]` (default: `a`).
 - `--include-backs` adds a second page of backs for double-sided cards and flips each row for duplex alignment.
 - `--skip-core` skips cards whose `pack_code` is `core` (useful if you own only the Core Set).
