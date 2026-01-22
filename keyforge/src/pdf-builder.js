@@ -1,4 +1,16 @@
-const { PDFDocument, rgb, StandardFonts } = require('pdf-lib');
+const {
+  PDFDocument,
+  rgb,
+  StandardFonts,
+  pushGraphicsState,
+  popGraphicsState,
+  moveTo,
+  lineTo,
+  appendBezierCurve,
+  closePath,
+  clip,
+  endPath,
+} = require('pdf-lib');
 const {
   GAP_BETWEEN_CARDS_MM,
   A4_WIDTH_PT,
@@ -9,7 +21,19 @@ const {
   drawRulers,
   drawPageLabel,
 } = require('../../shared/pdf-layout');
+const { applyRoundedRectClip, restoreGraphicsState } = require('../../shared/pdf-drawing');
 const { ensureCardImage, embedImage, MissingCardImageError } = require('./image-utils');
+
+const PDF_OPS = {
+  pushGraphicsState,
+  popGraphicsState,
+  moveTo,
+  lineTo,
+  appendBezierCurve,
+  closePath,
+  clip,
+  endPath,
+};
 
 async function buildPdf({
   cards,
@@ -81,7 +105,7 @@ async function buildPdf({
       try {
         const imagePath = await ensureCardImage(card, cacheDir, { refresh: refreshImages });
         const embedded = await embedImage(pdfDoc, imagePath, imageCache);
-        page.drawImage(embedded, { x, y, width: scaledWidth, height: scaledHeight });
+        drawCardImage(page, embedded, { x, y, width: scaledWidth, height: scaledHeight });
       } catch (err) {
         if (err instanceof MissingCardImageError) {
           drawMissingImage(page, fonts, {
@@ -218,6 +242,13 @@ function drawMissingImage(page, fonts, { x, y, width, height, card, color, strok
   }
 }
 
+function drawCardImage(page, embedded, { x, y, width, height }) {
+  const cornerRadius = Math.min(width, height) * 0.05;
+  applyRoundedRectClip(page, PDF_OPS, { x, y, width, height, radius: cornerRadius });
+  page.drawImage(embedded, { x, y, width, height });
+  restoreGraphicsState(page, PDF_OPS);
+}
+
 function clipText(font, text, size, maxWidth) {
   const raw = String(text || '');
   if (font.widthOfTextAtSize(raw, size) <= maxWidth) return raw;
@@ -235,4 +266,3 @@ function clipText(font, text, size, maxWidth) {
 module.exports = {
   buildPdf,
 };
-
