@@ -32,10 +32,22 @@ async function resolveCardImageSource({ card, imageSrc, face }, options = {}) {
   const label = formatCardLabel(card, face);
 
   const explicit = typeof imageSrc === 'string' ? imageSrc.trim() : '';
-  if (explicit) return resolveImageUrl(explicit, baseUrl, { label });
+  if (explicit && /^https?:\/\//i.test(explicit)) {
+    return resolveImageUrl(explicit, baseUrl, { label });
+  }
 
-  const code = card?.code != null ? String(card.code).trim() : '';
-  if (!code) return null;
+  const primaryField = face === 'back' ? card?.backimagesrc : card?.imagesrc;
+  const primary = typeof primaryField === 'string' ? primaryField.trim() : '';
+
+  const explicitCode = extractCodeFromImageSrc(explicit);
+  const primaryCode = extractCodeFromImageSrc(primary);
+  const cardCode = card?.code != null ? String(card.code).trim() : '';
+  const code = explicitCode || primaryCode || cardCode;
+  if (!code) {
+    if (explicit) return resolveImageUrl(explicit, baseUrl, { label });
+    if (primary) return resolveImageUrl(primary, baseUrl, { label });
+    return null;
+  }
 
   // Prefer Merlin's mirror when available; it tends to have higher-resolution images.
   if (fallbackImageCache.has(code)) {
@@ -46,7 +58,7 @@ async function resolveCardImageSource({ card, imageSrc, face }, options = {}) {
   fallbackImageCache.set(code, resolved);
   if (resolved) return resolved;
 
-  const primary = typeof card?.imagesrc === 'string' ? card.imagesrc.trim() : '';
+  if (explicit) return resolveImageUrl(explicit, baseUrl, { label });
   if (primary) return resolveImageUrl(primary, baseUrl, { label });
 
   return null;
@@ -65,8 +77,7 @@ async function resolveMerlinFallbackImageUrl(code, fallbackBaseUrl) {
   for (const pathname of candidates) {
     const url = new URL(pathname, normalizedBase).toString();
     try {
-      const res = await fetch(url, { method: 'HEAD' });
-      if (res.ok) return url;
+      if (await probeImageUrl(url)) return url;
     } catch (_) {
       // ignore and try next
     }
@@ -87,6 +98,48 @@ async function resolveMerlinFallbackImageUrl(code, fallbackBaseUrl) {
   }
 
   return null;
+}
+
+function extractCodeFromImageSrc(imageSrc) {
+  const raw = typeof imageSrc === 'string' ? imageSrc.trim() : '';
+  if (!raw) return '';
+
+  try {
+    const parsed = new URL(raw, 'https://placeholder.invalid');
+    const basename = path.basename(parsed.pathname);
+    const ext = path.extname(basename);
+    const code = basename.slice(0, basename.length - ext.length).trim();
+    if (!code) return '';
+    if (/^[0-9]+[a-z]?$/i.test(code)) return code;
+    return '';
+  } catch (_) {
+    return '';
+  }
+}
+
+async function probeImageUrl(url) {
+  let res;
+  try {
+    res = await fetch(url, { method: 'HEAD' });
+    if (res.ok) return true;
+    if (res.status === 404) return false;
+  } catch (_) {
+    // ignore and fall through to GET probe
+  }
+
+  // Some mirrors don’t support HEAD reliably; probe with a ranged GET.
+  try {
+    res = await fetch(url, { method: 'GET', headers: { range: 'bytes=0-0' } });
+    if (!res.ok) return false;
+    try {
+      res.body?.cancel?.();
+    } catch (_) {
+      // ignore
+    }
+    return true;
+  } catch (_) {
+    return false;
+  }
 }
 
 async function ensureCardImage({ card, imageSrc, face }, cacheDir, options = {}) {

@@ -4,7 +4,7 @@ const http = require('node:http');
 const os = require('node:os');
 const path = require('node:path');
 const fs = require('node:fs/promises');
-const { spawnSync } = require('node:child_process');
+const { spawn } = require('node:child_process');
 
 function startServer(routes) {
   const server = http.createServer((req, res) => {
@@ -30,16 +30,46 @@ function startServer(routes) {
   });
 }
 
-function runDownloadCli(args) {
+function runDownloadCli(args, options = {}) {
+  const timeoutMs = Number(options.timeoutMs) || 15_000;
   const cliPath = path.resolve(__dirname, 'download-cli.js');
-  const result = spawnSync(process.execPath, [cliPath, ...args], {
-    encoding: 'utf8',
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [cliPath, ...args], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: {
+        ...process.env,
+        HTTP_PROXY: '',
+        HTTPS_PROXY: '',
+        ALL_PROXY: '',
+        NO_PROXY: '127.0.0.1,localhost',
+        http_proxy: '',
+        https_proxy: '',
+        all_proxy: '',
+        no_proxy: '127.0.0.1,localhost',
+      },
+    });
+
+    let stdout = '';
+    let stderr = '';
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', chunk => (stdout += chunk));
+    child.stderr.on('data', chunk => (stderr += chunk));
+
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL');
+      resolve({ status: null, stdout, stderr: `${stderr}\nTimed out after ${timeoutMs}ms` });
+    }, timeoutMs);
+
+    child.on('error', err => {
+      clearTimeout(timer);
+      reject(err);
+    });
+    child.on('close', code => {
+      clearTimeout(timer);
+      resolve({ status: code, stdout, stderr });
+    });
   });
-  return {
-    status: result.status,
-    stdout: result.stdout || '',
-    stderr: result.stderr || '',
-  };
 }
 
 test('marvel-download: --no-hero omits hero and alter-ego', async () => {
@@ -95,7 +125,7 @@ test('marvel-download: --no-hero omits hero and alter-ego', async () => {
   const dataCache = path.join(tmpDir, 'cards.json');
 
   try {
-    const baseline = runDownloadCli(['1', '--base-url', baseUrl, '--data-cache', dataCache, '--no-header']);
+    const baseline = await runDownloadCli(['1', '--base-url', baseUrl, '--data-cache', dataCache, '--no-header']);
     assert.equal(baseline.status, 0, `baseline failed: ${baseline.stderr}`);
     assert.match(baseline.stdout, /\[01001a\]/);
     assert.match(baseline.stdout, /\[01001b\]/);
@@ -103,7 +133,7 @@ test('marvel-download: --no-hero omits hero and alter-ego', async () => {
     assert.match(baseline.stdout, /\[01003\]/);
     assert.match(baseline.stdout, /\[01004\]/);
 
-    const filtered = runDownloadCli(['1', '--base-url', baseUrl, '--data-cache', dataCache, '--no-header', '--no-hero']);
+    const filtered = await runDownloadCli(['1', '--base-url', baseUrl, '--data-cache', dataCache, '--no-header', '--no-hero']);
     assert.equal(filtered.status, 0, `filtered failed: ${filtered.stderr}`);
     assert.doesNotMatch(filtered.stdout, /\[01001a\]/);
     assert.doesNotMatch(filtered.stdout, /\[01001b\]/);
