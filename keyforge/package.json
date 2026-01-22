@@ -1,0 +1,17 @@
+{
+  "name": "keyforge-adventures",
+  "version": "1.0.0",
+  "description": "CLI tools to download and render printable proxy PDFs for KeyForge Adventures (no Archon deck support).",
+  "bin": {
+    "keyforge-adventure": "src/cli.js"
+  },
+  "type": "commonjs",
+  "scripts": {
+    "test": "echo \"No tests defined\" && exit 0"
+  },
+  "dependencies": {
+    "commander": "^14.0.2",
+    "pdf-lib": "^1.17.1"
+  }
+}
+
