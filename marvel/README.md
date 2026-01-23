@@ -65,7 +65,10 @@ Search the cached MarvelCDB database by name/rules text and print matching cards
 npx marvel-search spider man
 npx marvel-search --type ally --aspect justice --annotate
 npx marvel-search --type ally --aspect justice --cost 2- --annotate
+npx marvel-search --type event --dedupe "energy barrier"
 ```
+
+Use `--dedupe` to collapse reprints across packs (matches on title + cost + rules text).
 
 Supported `--type` codes: `ally`, `alter_ego`, `attachment`, `environment`, `event`, `evidence_means`, `evidence_motive`, `evidence_opportunity`, `hero`, `leader`, `main_scheme`, `minion`, `obligation`, `player_side_scheme`, `resource`, `side_scheme`, `support`, `treachery`, `upgrade`, `villain`.
 

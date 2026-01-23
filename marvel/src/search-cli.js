@@ -50,6 +50,11 @@ async function main() {
     .option('--code <code>', 'Filter by exact card code')
     .option('--sort <mode>', 'Sort results by: cost|name', 'cost')
     .option('--limit <number>', 'Max results to print (0 = no limit)', '25')
+    .option(
+      '--dedupe',
+      'Remove duplicates across packs (match on title + cost + rules text; keeps first in sort order)',
+      false,
+    )
     .option('--json', 'Output JSON instead of a formatted list', false)
     .option('--annotate', 'Output deck-style entries with //? annotations', false)
     .addHelpText(
@@ -74,7 +79,7 @@ async function main() {
   const filters = parseFilters(options);
   const scope = normalizeScope(options.in);
   const sortMode = normalizeSort(options.sort);
-  const results = searchCards(cards, { query, scope, filters, sortMode });
+  const results = searchCards(cards, { query, scope, filters, sortMode, dedupe: Boolean(options.dedupe) });
   const limit = parseLimit(options.limit);
   const toPrint = limit === null ? results : results.slice(0, limit);
 
@@ -173,7 +178,7 @@ function parseFilters(options) {
 }
 
 function searchCards(cards, options) {
-  const { query = '', scope = 'all', filters = {}, sortMode = 'cost' } = options || {};
+  const { query = '', scope = 'all', filters = {}, sortMode = 'cost', dedupe = false } = options || {};
   const normalizedQuery = normalizeForSearch(query);
   const terms = normalizedQuery ? normalizedQuery.split(' ') : [];
 
@@ -195,7 +200,7 @@ function searchCards(cards, options) {
     return String(a?.code || '').localeCompare(String(b?.code || ''), 'en', { numeric: true });
   });
 
-  return searched;
+  return dedupe ? dedupeCards(searched) : searched;
 }
 
 function parseSortCost(card) {
@@ -269,6 +274,32 @@ function buildSearchText(card, scope) {
 function stripHtml(text) {
   if (typeof text !== 'string') return '';
   return text.replace(/<\/?[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function buildCardTitle(card) {
+  const name = String(card?.name || card?.real_name || '').trim();
+  const subname = String(card?.subname || '').trim();
+  if (!subname) return name;
+  return `${name} — ${subname}`.trim();
+}
+
+function buildDedupeKey(card) {
+  const title = normalizeForSearch(buildCardTitle(card));
+  const cost = card?.cost === 0 || Number.isFinite(card?.cost) ? String(card.cost) : '';
+  const text = normalizeForSearch(stripHtml(card?.text));
+  return `${title}\t${cost}\t${text}`;
+}
+
+function dedupeCards(cards) {
+  const out = [];
+  const seen = new Set();
+  for (const card of Array.isArray(cards) ? cards : []) {
+    const key = buildDedupeKey(card);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(card);
+  }
+  return out;
 }
 
 function canonicalizeCards(cards) {
