@@ -1,0 +1,22 @@
+{
+  "name": "ashes-proxy",
+  "version": "1.0.0",
+  "description": "CLI tools to parse Ashes Reborn deck lists, search Ashes.live, and render printable proxy PDFs.",
+  "bin": {
+    "ashes-proxy": "src/cli.js",
+    "ashes-annotate": "src/annotate-cli.js",
+    "ashes-parse": "src/parse-cli.js",
+    "ashes-search": "src/search-cli.js",
+    "ashes-analyze": "src/analyze-cli.js",
+    "ashes-pack": "src/pack-cli.js",
+    "ashes-download": "src/download-cli.js"
+  },
+  "type": "commonjs",
+  "scripts": {
+    "test": "node --test \"src/*.test.js\""
+  },
+  "dependencies": {
+    "commander": "^14.0.2",
+    "pdf-lib": "^1.17.1"
+  }
+}
