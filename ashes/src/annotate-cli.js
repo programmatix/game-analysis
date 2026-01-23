@@ -3,7 +3,7 @@ const path = require('path');
 const { Command } = require('commander');
 const { readDeckText, parseDeckList, hasCardEntries } = require('../../shared/deck-utils');
 const { normalizeAshesDeckEntries, formatResolvedDeckEntries } = require('./decklist');
-const { loadCardDatabase, buildCardLookup, resolveCard } = require('./card-data');
+const { withCardDatabase, resolveCard } = require('./card-data');
 const { ANNOTATION_PREFIX, buildCardComment } = require('./annotation-format');
 
 async function main() {
@@ -41,29 +41,40 @@ async function main() {
   }
   const deckEntries = normalizeAshesDeckEntries(parsedEntries);
 
-  const cards = await loadCardDatabase({
-    cachePath: options.dataCache,
-    refresh: Boolean(options.refreshData),
-    baseUrl: String(options.apiBaseUrl || 'https://api.ashes.live').trim(),
-    showLegacy: Boolean(options.showLegacy),
-  });
-  const { lookup, cardIndex } = buildCardLookup(cards);
+  const resolved = await withCardDatabase(
+    {
+      cachePath: options.dataCache,
+      refresh: Boolean(options.refreshData),
+      baseUrl: String(options.apiBaseUrl || 'https://api.ashes.live').trim(),
+      showLegacy: Boolean(options.showLegacy),
+    },
+    ({ lookup, cardIndex }) => {
+      const failures = [];
+      const mapped = deckEntries.map(entry => {
+        if (!entry || entry.proxyPageBreak) return entry;
+        try {
+          const card = resolveCard(entry, lookup, cardIndex);
+          return { ...entry, resolved: card };
+        } catch (err) {
+          failures.push(`- ${entry.name || '(unknown)'}: ${err instanceof Error ? err.message : String(err)}`);
+          return { ...entry, resolved: null };
+        }
+      });
 
-  const failures = [];
-  const resolved = deckEntries.map(entry => {
-    if (!entry || entry.proxyPageBreak) return entry;
-    try {
-      const card = resolveCard(entry, lookup, cardIndex);
-      return { ...entry, resolved: card };
-    } catch (err) {
-      failures.push(`- ${entry.name || '(unknown)'}: ${err instanceof Error ? err.message : String(err)}`);
-      return { ...entry, resolved: null };
-    }
-  });
+      if (failures.length) {
+        throw new Error(
+          `Failed to resolve ${failures.length} card${failures.length === 1 ? '' : 's'}:\n${failures.join('\n')}`,
+        );
+      }
 
-  if (failures.length) {
-    throw new Error(`Failed to resolve ${failures.length} card${failures.length === 1 ? '' : 's'}:\n${failures.join('\n')}`);
-  }
+      return mapped;
+    },
+    {
+      onRefresh: () => {
+        console.warn('Card database cache appears out of date; refreshing from Ashes.live...');
+      },
+    },
+  );
 
   if (options.json) {
     process.stdout.write(`${JSON.stringify(resolved, null, 2)}\n`);

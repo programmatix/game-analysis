@@ -271,12 +271,43 @@ function formatDeckEntrySource(source) {
   return '';
 }
 
+function isMissingCardDatabaseError(err) {
+  if (!(err instanceof Error)) return false;
+  const message = String(err.message || '');
+  return message.includes('was not found in the Ashes.live card database');
+}
+
+async function withCardDatabase(options, fn, config = {}) {
+  if (typeof fn !== 'function') {
+    throw new Error('withCardDatabase requires a callback function.');
+  }
+
+  const { onRefresh } = config || {};
+
+  const cards = await loadCardDatabase(options);
+  const { lookup, cardIndex } = buildCardLookup(cards);
+
+  try {
+    return await fn({ cards, lookup, cardIndex });
+  } catch (err) {
+    const refresh = Boolean(options?.refresh);
+    if (!refresh && isMissingCardDatabaseError(err)) {
+      if (typeof onRefresh === 'function') onRefresh(err);
+      const refreshedCards = await loadCardDatabase({ ...(options || {}), refresh: true });
+      const refreshedLookup = buildCardLookup(refreshedCards);
+      return await fn({ cards: refreshedCards, lookup: refreshedLookup.lookup, cardIndex: refreshedLookup.cardIndex });
+    }
+    throw err;
+  }
+}
+
 module.exports = {
   DEFAULT_API_BASE_URL,
   AmbiguousCardError,
   loadCardDatabase,
   buildCardCodeIndex,
   buildCardLookup,
+  withCardDatabase,
   resolveCard,
   resolveDeckCards,
 };

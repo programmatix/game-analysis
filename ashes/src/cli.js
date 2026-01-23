@@ -4,7 +4,7 @@ const path = require('path');
 const { readDeckText, parseDeckList, countDeckEntries, hasCardEntries } = require('../../shared/deck-utils');
 const { parseCliOptions } = require('./options');
 const { normalizeAshesDeckEntries } = require('./decklist');
-const { loadCardDatabase, buildCardLookup, resolveDeckCards } = require('./card-data');
+const { withCardDatabase, resolveDeckCards } = require('./card-data');
 const { buildPdf } = require('./pdf-builder');
 const { formatCardLabel, resolveCardImageSource } = require('./image-utils');
 
@@ -37,14 +37,6 @@ async function main() {
     }
   }
 
-  const cards = await loadCardDatabase({
-    cachePath: options.dataCache,
-    refresh: options.refreshData,
-    baseUrl: options.apiBaseUrl,
-    showLegacy: options.showLegacy,
-  });
-  const { lookup, cardIndex } = buildCardLookup(cards);
-
   const { proxyEntries, skippedProxyCount } = splitProxyEntries(deckEntries);
   if (!proxyEntries.length) {
     throw new Error('All deck entries were marked [skipproxy]; nothing to proxy.');
@@ -53,10 +45,24 @@ async function main() {
     console.log(`Skipping ${skippedProxyCount} card${skippedProxyCount === 1 ? '' : 's'} marked [skipproxy].`);
   }
 
-  const deckCards = resolveDeckCards(proxyEntries, lookup, cardIndex, {
-    attachEntry: true,
-    preservePageBreaks: true,
-  });
+  const deckCards = await withCardDatabase(
+    {
+      cachePath: options.dataCache,
+      refresh: options.refreshData,
+      baseUrl: options.apiBaseUrl,
+      showLegacy: options.showLegacy,
+    },
+    ({ lookup, cardIndex }) =>
+      resolveDeckCards(proxyEntries, lookup, cardIndex, {
+        attachEntry: true,
+        preservePageBreaks: true,
+      }),
+    {
+      onRefresh: () => {
+        console.warn('Card database cache appears out of date; refreshing from Ashes.live...');
+      },
+    },
+  );
 
   const missingImages = await collectMissingImages(deckCards, { cdnBaseUrl: options.cdnBaseUrl });
   if (missingImages.length > 0) {
@@ -158,4 +164,3 @@ main().catch(err => {
   console.error(err instanceof Error ? err.message : err);
   process.exit(1);
 });
-

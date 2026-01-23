@@ -1,7 +1,10 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 
-const { buildCardLookup, resolveCard, resolveDeckCards } = require('./card-data');
+const { buildCardLookup, resolveCard, resolveDeckCards, withCardDatabase } = require('./card-data');
 
 test('resolveCard uses ashes.releaseStub hint to disambiguate', () => {
   const cards = [
@@ -36,3 +39,43 @@ test('resolveDeckCards aggregates missing and ambiguous card references', () => 
   );
 });
 
+test('withCardDatabase refreshes the cache when a stub is missing', async () => {
+  const originalFetch = global.fetch;
+  let fetchCalls = 0;
+
+  try {
+    global.fetch = async () => {
+      fetchCalls += 1;
+      return {
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        async json() {
+          return {
+            results: [{ name: 'Final Stand', stub: 'final-stand', release: { name: 'R', stub: 'r' }, type: 'Action Spell' }],
+            next: null,
+          };
+        },
+      };
+    };
+
+    const tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'ashes-card-data-test-'));
+    const cachePath = path.join(tmpDir, 'asheslive-cards.json');
+
+    await fs.promises.writeFile(cachePath, JSON.stringify([{ name: 'Other Card', stub: 'other-card' }], null, 2));
+
+    const resolved = await withCardDatabase(
+      { cachePath, refresh: false, baseUrl: 'https://api.ashes.live', showLegacy: false },
+      ({ lookup, cardIndex }) => resolveCard({ count: 1, name: 'Final Stand', code: 'final-stand' }, lookup, cardIndex),
+    );
+
+    assert.equal(resolved.stub, 'final-stand');
+    assert.equal(fetchCalls, 1);
+
+    const refreshedCache = JSON.parse(await fs.promises.readFile(cachePath, 'utf8'));
+    assert.ok(Array.isArray(refreshedCache));
+    assert.ok(refreshedCache.some(card => card && card.stub === 'final-stand'));
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
