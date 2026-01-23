@@ -59,16 +59,19 @@ npx marvel-analyze --input decks/sample-deck.txt
 
 ### Card search
 
-Search the cached MarvelCDB database by name/rules text and print matching cards:
+Search the cached MarvelCDB database by name/rules text and print matching cards (defaults to decklist-style output, so it can be piped into `marvel-proxy`):
 
 ```bash
 npx marvel-search spider man
 npx marvel-search --type ally --aspect justice --annotate
 npx marvel-search --type ally --aspect justice --cost 2- --annotate
 npx marvel-search --type event --dedupe "energy barrier"
+npx marvel-search --aspect aggression --limit 0 | npx marvel-proxy
 ```
 
 Use `--dedupe` to collapse reprints across packs (matches on title + cost + rules text).
+By default output is grouped by type (Ally/Event/etc.) with comment headings; disable with `--no-group-by-type`.
+Use `--format cards` to print a one-line-per-card detailed list instead of decklist entries.
 
 Supported `--type` codes: `ally`, `alter_ego`, `attachment`, `environment`, `event`, `evidence_means`, `evidence_motive`, `evidence_opportunity`, `hero`, `leader`, `main_scheme`, `minion`, `obligation`, `player_side_scheme`, `resource`, `side_scheme`, `support`, `treachery`, `upgrade`, `villain`.
 

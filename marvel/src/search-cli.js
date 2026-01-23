@@ -57,6 +57,8 @@ async function main() {
     )
     .option('--json', 'Output JSON instead of a formatted list', false)
     .option('--annotate', 'Output deck-style entries with //? annotations', false)
+    .option('--format <mode>', 'Output format: deck|cards (default: deck)', 'deck')
+    .option('--no-group-by-type', 'Disable grouping output by type headings')
     .addHelpText(
       'after',
       `\nSupported --type codes:\n  ${SUPPORTED_TYPE_CODES.join(', ')}\n`,
@@ -66,6 +68,9 @@ async function main() {
   const options = program.opts();
   if (options.json && options.annotate) {
     throw new Error('Use only one of --json or --annotate');
+  }
+  if ((options.json || options.annotate) && options.format && normalizeForSearch(options.format) !== 'deck') {
+    throw new Error('Do not use --format together with --json or --annotate');
   }
   const query = buildQuery(program.args);
 
@@ -85,17 +90,15 @@ async function main() {
 
   if (Boolean(options.json)) {
     process.stdout.write(`${JSON.stringify(toPrint, null, 2)}\n`);
-  } else if (Boolean(options.annotate)) {
-    for (const card of toPrint) {
-      process.stdout.write(`${formatDeckEntryLine(card)}\n`);
-      process.stdout.write(
-        `${ANNOTATION_PREFIX}${buildCardComment(card, { canonicalPackCodes, cardIndex })}\n`,
-      );
-    }
   } else {
-    for (const card of toPrint) {
-      process.stdout.write(`${formatCardLine(card)}\n`);
-    }
+    const outputMode = Boolean(options.annotate) ? 'annotate' : normalizeFormat(options.format);
+    const groupByType = Boolean(options.groupByType);
+    writeCardOutput(toPrint, {
+      mode: outputMode,
+      groupByType,
+      canonicalPackCodes,
+      cardIndex,
+    });
   }
 
   if (limit !== null && results.length > limit) {
@@ -118,6 +121,12 @@ function normalizeSort(raw) {
   const sort = normalizeForSearch(raw);
   if (sort === 'cost' || sort === 'name') return sort;
   throw new Error('--sort must be one of: cost, name');
+}
+
+function normalizeFormat(raw) {
+  const format = normalizeForSearch(raw);
+  if (format === 'deck' || format === 'cards') return format;
+  throw new Error('--format must be one of: deck, cards');
 }
 
 function parseLimit(raw) {
@@ -321,6 +330,76 @@ function canonicalizeCards(cards) {
     seen.add(canonicalCode);
     out.push(canonical);
   }
+
+  return out;
+}
+
+function writeCardOutput(cards, options = {}) {
+  const { mode = 'deck', groupByType = true, canonicalPackCodes, cardIndex } = options;
+
+  if (!groupByType) {
+    for (const card of Array.isArray(cards) ? cards : []) {
+      writeCardLine(card, { mode, canonicalPackCodes, cardIndex });
+    }
+    return;
+  }
+
+  const groups = groupCardsByType(cards);
+  for (let i = 0; i < groups.length; i += 1) {
+    const group = groups[i];
+    process.stdout.write(`// ${group.label}\n`);
+    for (const card of group.cards) {
+      writeCardLine(card, { mode, canonicalPackCodes, cardIndex });
+    }
+    if (i !== groups.length - 1) {
+      process.stdout.write('\n');
+    }
+  }
+}
+
+function writeCardLine(card, options = {}) {
+  const { mode, canonicalPackCodes, cardIndex } = options;
+
+  if (mode === 'cards') {
+    process.stdout.write(`${formatCardLine(card)}\n`);
+    return;
+  }
+
+  if (mode === 'annotate') {
+    process.stdout.write(`${formatDeckEntryLine(card)}\n`);
+    process.stdout.write(`${ANNOTATION_PREFIX}${buildCardComment(card, { canonicalPackCodes, cardIndex })}\n`);
+    return;
+  }
+
+  process.stdout.write(`${formatDeckEntryLine(card)}\n`);
+}
+
+function groupCardsByType(cards) {
+  const groups = new Map(); // type_code -> { key, label, cards }
+
+  for (const card of Array.isArray(cards) ? cards : []) {
+    const typeCode = normalizeForSearch(card?.type_code || card?.type_name || 'unknown');
+    const label = String(card?.type_name || card?.type_code || 'Unknown').trim() || 'Unknown';
+    const existing = groups.get(typeCode);
+    if (existing) {
+      existing.cards.push(card);
+    } else {
+      groups.set(typeCode, { key: typeCode, label, cards: [card] });
+    }
+  }
+
+  const order = new Map(SUPPORTED_TYPE_CODES.map((code, index) => [code, index]));
+  const out = Array.from(groups.values());
+  out.sort((a, b) => {
+    const orderA = order.has(a.key) ? order.get(a.key) : Number.POSITIVE_INFINITY;
+    const orderB = order.has(b.key) ? order.get(b.key) : Number.POSITIVE_INFINITY;
+    if (orderA !== orderB) return orderA - orderB;
+    const labelA = String(a.label || '').toLowerCase();
+    const labelB = String(b.label || '').toLowerCase();
+    if (labelA < labelB) return -1;
+    if (labelA > labelB) return 1;
+    return a.key.localeCompare(b.key);
+  });
 
   return out;
 }

@@ -122,3 +122,65 @@ test('marvel-search: --dedupe removes duplicates across packs', async () => {
   }
 });
 
+test('marvel-search: default output is decklist grouped by type', async () => {
+  const cards = [
+    {
+      code: '01002',
+      name: 'Ally Card',
+      type_code: 'ally',
+      type_name: 'Ally',
+      faction_code: 'aggression',
+      faction_name: 'Aggression',
+      pack_code: 'p1',
+      pack_name: 'Pack One',
+      position: 2,
+      cost: 1,
+      text: 'A friendly helper.',
+    },
+    {
+      code: '01003',
+      name: 'Event Card',
+      type_code: 'event',
+      type_name: 'Event',
+      faction_code: 'aggression',
+      faction_name: 'Aggression',
+      pack_code: 'p1',
+      pack_name: 'Pack One',
+      position: 3,
+      cost: 0,
+      text: 'Do a thing.',
+    },
+    // Include at least one encounter card so loadCardDatabase treats this cache as complete.
+    {
+      code: '90002',
+      name: 'Villain',
+      type_code: 'villain',
+      type_name: 'Villain',
+      pack_code: 'enc',
+      pack_name: 'Encounter Set',
+      position: 2,
+      cost: 0,
+      text: 'Bad stuff.',
+    },
+  ];
+
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'marvel-search-test-'));
+  const dataCache = path.join(tmpDir, 'cards.json');
+  await fs.writeFile(dataCache, JSON.stringify(cards, null, 2));
+
+  try {
+    const baseline = await runSearchCli(['card', '--data-cache', dataCache, '--limit', '0']);
+    assert.equal(baseline.status, 0, `baseline failed: ${baseline.stderr}`);
+    assert.match(baseline.stdout, /^\/\/ Ally$/m);
+    assert.match(baseline.stdout, /^1x Ally Card \[01002\]$/m);
+    assert.match(baseline.stdout, /^\/\/ Event$/m);
+    assert.match(baseline.stdout, /^1x Event Card \[01003\]$/m);
+
+    const ungrouped = await runSearchCli(['card', '--data-cache', dataCache, '--limit', '0', '--no-group-by-type']);
+    assert.equal(ungrouped.status, 0, `ungrouped failed: ${ungrouped.stderr}`);
+    assert.doesNotMatch(ungrouped.stdout, /^\/\/ Ally$/m);
+    assert.match(ungrouped.stdout, /^1x Ally Card \[01002\]$/m);
+  } finally {
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  }
+});
