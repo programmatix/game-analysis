@@ -20,6 +20,7 @@ async function main() {
     .option('--tuck-extra-mm <number>', 'Extra tuck tab length beyond the top/bottom face depth', '15')
     .option('--margin-mm <number>', 'Minimum page margin for the net (0 maximizes usable area)', '0')
     .option('--accent <hex>', 'Accent color (hex like #f7d117)', '#f7d117')
+    .option('--aspect <name>', 'Aspect color preset (justice|leadership|aggression|protection|basic|pool)', '')
     .option('--art <file>', 'Front art image (PNG/JPG)', '')
     .option('--front-art-offset-x-mm <number>', 'Front art horizontal offset in millimetres', '0')
     .option('--front-art-offset-y-mm <number>', 'Front art vertical offset in millimetres', '0')
@@ -60,6 +61,8 @@ async function main() {
     errors.push('--orientation must be one of: auto, portrait, landscape');
   }
 
+  const accent = resolveAccent(opts.aspect, opts.accent, errors);
+
   if (errors.length) {
     throw new Error(`Invalid options:\n- ${errors.join('\n- ')}`);
   }
@@ -70,7 +73,7 @@ async function main() {
     heroName: hero,
     miscText: opts.text,
     ...numbers,
-    accent: opts.accent,
+    accent,
     artPath: opts.art,
     logoPath: opts.logo,
     noLogo: Boolean(opts.noLogo),
@@ -90,6 +93,27 @@ async function main() {
     console.warn(`Font notes:\n- ${fontWarnings.join('\n- ')}`);
     console.warn('Tip: put TTF/OTF files in `marvel/assets/fonts/`, or pass `--fonts-dir`, or pass `--font-config`.');
   }
+}
+
+function resolveAccent(aspectRaw, accentRaw, errors) {
+  const aspect = typeof aspectRaw === 'string' ? aspectRaw.trim().toLowerCase() : '';
+  if (!aspect) return accentRaw;
+
+  const presets = {
+    justice: '#f7d117',
+    leadership: '#0076c8',
+    aggression: '#d4252a',
+    protection: '#1f8a3b',
+    basic: '#9aa0a6',
+    pool: '#7c4dff',
+  };
+
+  const hex = presets[aspect];
+  if (!hex) {
+    errors.push('--aspect must be one of: justice, leadership, aggression, protection, basic, pool');
+    return accentRaw;
+  }
+  return hex;
 }
 
 function resolveOutputPath(raw, heroName) {

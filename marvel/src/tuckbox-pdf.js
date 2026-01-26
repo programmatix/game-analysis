@@ -238,25 +238,22 @@ function drawTopText(page, fonts, topFaceMm, { heroName, miscText }, palette) {
   const titleSizeMm = fitTextSizeMm(fonts.title, title, inset.width, 8, 3.5);
   const titleHeightMm = titleSizeMm * 1.12;
   const titleBox = { x: inset.x, y: inset.y + inset.height - titleHeightMm, width: inset.width, height: titleHeightMm };
-  drawCenteredTextShadowMm(page, fonts.title, title, titleBox, {
+  drawCenteredTextOutlineMm(page, fonts.title, title, titleBox, {
     sizePt: mmToPt(titleSizeMm),
     color: palette.white,
-    shadowColor: rgb(0, 0, 0),
-    shadowOffsetMm: { x: 0.3, y: -0.3 },
-  });
-
-  drawCenteredTextMm(page, fonts.title, title, titleBox, {
-    sizePt: mmToPt(titleSizeMm),
-    color: palette.white,
+    outlineColor: rgb(0, 0, 0),
+    outlineOffsetMm: 0.35,
     yOffsetMm: -0.2,
   });
 
   if (!miscText.lines.length) return;
   const miscSizeMm = Math.min(3.6, titleSizeMm * 0.55);
   const miscBox = { x: inset.x, y: inset.y, width: inset.width, height: inset.height - titleHeightMm + 0.5 };
-  drawWrappedTextMm(page, fonts.body, miscText.lines.join('\n'), miscBox, {
+  drawWrappedTextOutlineMm(page, fonts.body, miscText.lines.join('\n'), miscBox, {
     sizePt: mmToPt(miscSizeMm),
     color: rgb(0.92, 0.92, 0.92),
+    outlineColor: rgb(0, 0, 0),
+    outlineOffsetMm: 0.3,
     align: 'center',
     maxLines: 2,
     valign: 'top',
@@ -402,8 +399,13 @@ function drawLineLabel(page, fonts, { label, type, seg }, palette) {
 function drawZoneLabels(page, fonts, layout, palette) {
   const zones = buildZoneLabels(layout);
   for (const zone of zones) {
+    if (shouldHideZoneLabel(zone.label)) continue;
     drawZoneLabel(page, fonts, zone, palette);
   }
+}
+
+function shouldHideZoneLabel(label) {
+  return label === 'ZG' || label === 'ZH' || label === 'ZK' || label === 'ZL';
 }
 
 function buildZoneLabels(layout) {
@@ -426,11 +428,24 @@ function buildZoneLabels(layout) {
     });
   }
 
-  return rects.map((rectMm, index) => ({
-    rectMm,
-    label: `Z${alphaIndex(index)}`,
-    isGlue: rectMm.id === 'glue',
-  }));
+  const bottomBackTuck = layout.flaps?.bottomBackTuck;
+  const tuckExtraMm = Number(layout.dimensionsMm?.tuckExtraMm) || 0;
+  if (bottomBackTuck && tuckExtraMm > 0 && bottomBackTuck.height > tuckExtraMm) {
+    rects.push({
+      id: 'bottom-tuck-tab',
+      x: bottomBackTuck.x,
+      y: bottomBackTuck.y,
+      width: bottomBackTuck.width,
+      height: tuckExtraMm,
+    });
+  }
+
+  return rects.map((rectMm, index) => {
+    const label = `Z${alphaIndex(index)}`;
+    const isGlue = rectMm.id === 'glue' || label === 'ZJ' || rectMm.id === 'bottom-tuck-tab';
+    const glueFace = label === 'ZJ' || rectMm.id === 'bottom-tuck-tab' ? 'front' : null;
+    return { rectMm, label, isGlue, glueFace };
+  });
 }
 
 function alphaIndex(index) {
@@ -441,20 +456,9 @@ function alphaIndex(index) {
   return `${letters[first]}${letters[second]}`;
 }
 
-function drawZoneLabel(page, fonts, { rectMm, label, isGlue }, palette) {
+function drawZoneLabel(page, fonts, { rectMm, label, isGlue, glueFace }, palette) {
   const safe = insetRectMm(rectMm, 1.4);
   if (safe.width <= 0 || safe.height <= 0) return;
-
-  if (isGlue) {
-    const hatchStepMm = 4;
-    for (let x = rectMm.x - rectMm.height; x <= rectMm.x + rectMm.width; x += hatchStepMm) {
-      drawSolidLineMm(
-        page,
-        { x1: x, y1: rectMm.y, x2: x + rectMm.height, y2: rectMm.y + rectMm.height },
-        { color: rgb(0.7, 0.7, 0.7), thicknessPt: 0.4, opacity: 0.5 }
-      );
-    }
-  }
 
   const zoneSizeMm = fitTextSizeMm(fonts.mouseprint, label, safe.width, Math.min(10, safe.height), 2.8);
   const zoneBox = { x: safe.x, y: safe.y + safe.height / 2 - zoneSizeMm * 0.8, width: safe.width, height: zoneSizeMm * 1.6 };
@@ -464,11 +468,15 @@ function drawZoneLabel(page, fonts, { rectMm, label, isGlue }, palette) {
   });
 
   if (!isGlue) return;
-  const subSizeMm = Math.min(3.2, zoneSizeMm * 0.7);
-  const subBox = { x: safe.x, y: safe.y + 1, width: safe.width, height: subSizeMm * 1.4 };
-  drawCenteredTextMm(page, fonts.mouseprint, 'GLUE', subBox, {
+  const glueText = glueFace === 'front' ? 'GLUE (FRONT)' : 'GLUE';
+  const subSizeMm = Math.min(3.1, zoneSizeMm * 0.68);
+  const subBox = { x: safe.x, y: safe.y + 1, width: safe.width, height: subSizeMm * 1.6 };
+  drawWrappedTextMm(page, fonts.mouseprint, glueText, subBox, {
     sizePt: mmToPt(subSizeMm),
     color: rgb(0.25, 0.25, 0.25),
+    align: 'center',
+    maxLines: 2,
+    valign: 'bottom',
   });
 }
 
@@ -647,6 +655,26 @@ function drawCenteredTextShadowMm(page, font, text, rectMm, { sizePt, color, sha
   });
 }
 
+function drawCenteredTextOutlineMm(page, font, text, rectMm, { sizePt, color, outlineColor, outlineOffsetMm, yOffsetMm = 0 } = {}) {
+  const offset = Number(outlineOffsetMm) || 0;
+  const outline = outlineColor || rgb(0, 0, 0);
+  const offsets = [
+    { x: -offset, y: 0 },
+    { x: offset, y: 0 },
+    { x: 0, y: -offset },
+    { x: 0, y: offset },
+    { x: -offset, y: -offset },
+    { x: -offset, y: offset },
+    { x: offset, y: -offset },
+    { x: offset, y: offset },
+  ];
+
+  for (const o of offsets) {
+    drawCenteredTextMm(page, font, text, { ...rectMm, x: rectMm.x + o.x, y: rectMm.y + o.y }, { sizePt, color: outline, yOffsetMm });
+  }
+  drawCenteredTextMm(page, font, text, rectMm, { sizePt, color: color || rgb(1, 1, 1), yOffsetMm });
+}
+
 function drawWrappedTextMm(page, font, text, rectMm, { sizePt, color, align = 'left', maxLines = null, valign = 'center' } = {}) {
   const size = Number(sizePt) || mmToPt(3);
   const maxWidthPt = mmToPt(rectMm.width);
@@ -697,6 +725,25 @@ function drawWrappedTextShadowMm(page, font, text, rectMm, { sizePt, color, shad
     maxLines,
     valign,
   });
+}
+
+function drawWrappedTextOutlineMm(page, font, text, rectMm, { sizePt, color, outlineColor, outlineOffsetMm, align = 'left', maxLines = null, valign = 'center' } = {}) {
+  const offset = Number(outlineOffsetMm) || 0;
+  const outline = outlineColor || rgb(0, 0, 0);
+  const offsets = [
+    { x: -offset, y: 0 },
+    { x: offset, y: 0 },
+    { x: 0, y: -offset },
+    { x: 0, y: offset },
+    { x: -offset, y: -offset },
+    { x: -offset, y: offset },
+    { x: offset, y: -offset },
+    { x: offset, y: offset },
+  ];
+  for (const o of offsets) {
+    drawWrappedTextMm(page, font, text, { ...rectMm, x: rectMm.x + o.x, y: rectMm.y + o.y }, { sizePt, color: outline, align, maxLines, valign });
+  }
+  drawWrappedTextMm(page, font, text, rectMm, { sizePt, color: color || rgb(1, 1, 1), align, maxLines, valign });
 }
 
 function drawTextMm(page, font, text, atMm, { sizeMm, color } = {}) {

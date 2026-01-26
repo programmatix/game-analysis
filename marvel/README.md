@@ -53,6 +53,7 @@ Useful flags:
 - `--top-art-offset-x-mm/--top-art-offset-y-mm` adjusts top art cropping.
 - `--logo` sets the Marvel Champions logo image (default: `assets/logo.png`); use `--no-logo` to disable.
 - `--back` sets the back-panel image (default: `assets/cardback.png`).
+- `--aspect justice|leadership|aggression|protection|basic|pool` sets a preset accent color (overrides `--accent`).
 - Use `--no-duplex` to generate a 1-page single-sided template.
 - `--fonts-dir` and `--font-config` load the official Marvel Champions fonts when you have them locally (otherwise it falls back to Helvetica).
 - `--orientation auto|portrait|landscape` selects A4 orientation; `auto` picks the first that fits.

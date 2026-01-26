@@ -100,6 +100,11 @@ function computeTuckBoxLayout(options) {
     hSegment(xBack, xBack + W, bodyY - D),
   ];
 
+  // Override: the fold line under the left spine panel should be cut (requested as L8 with defaults).
+  // This is the horizontal segment on the body seam spanning the left spine width.
+  const spineBottomSeam = hSegment(xSide1, xFront, bodyY);
+  moveSegmentBetweenLists(foldSegments, cutSegments, spineBottomSeam);
+
   return {
     orientation: fit.orientation,
     pageWidthMm,
@@ -138,6 +143,24 @@ function computeTuckBoxLayout(options) {
       fold: [...foldSegments, ...extraFoldSegments],
     },
   };
+}
+
+function moveSegmentBetweenLists(fromList, toList, target, epsilon = 1e-6) {
+  const idx = fromList.findIndex(seg => sameSegment(seg, target, epsilon));
+  if (idx === -1) return false;
+  const [seg] = fromList.splice(idx, 1);
+  toList.push(seg);
+  toList.sort(compareSegments);
+  return true;
+}
+
+function sameSegment(a, b, epsilon) {
+  return (
+    Math.abs(a.x1 - b.x1) <= epsilon &&
+    Math.abs(a.y1 - b.y1) <= epsilon &&
+    Math.abs(a.x2 - b.x2) <= epsilon &&
+    Math.abs(a.y2 - b.y2) <= epsilon
+  );
 }
 
 function rect(id, x, y, width, height) {
