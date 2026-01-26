@@ -83,14 +83,10 @@ function computeTuckBoxLayout(options) {
   rects.push(rect('side-right', xSide2, bodyY, D, H));
 
   rects.push(rect('top-back', xBack, bodyTopY, W, D));
-  rects.push(rect('top-side-left', xSide1, bodyTopY, D, D));
   rects.push(rect('top-front-tuck', xFront, bodyTopY, W, topTuckFlapHeight));
-  rects.push(rect('top-side-right', xSide2, bodyTopY, D, D));
 
   rects.push(rect('bottom-back-tuck', xBack, bodyY - bottomTuckFlapHeight, W, bottomTuckFlapHeight));
   rects.push(rect('bottom-side-left', xSide1, bodyY - D, D, D));
-  rects.push(rect('bottom-front', xFront, bodyY - D, W, D));
-  rects.push(rect('bottom-side-right', xSide2, bodyY - D, D, D));
 
   const { cutSegments, foldSegments } = computeSegments(rects);
 

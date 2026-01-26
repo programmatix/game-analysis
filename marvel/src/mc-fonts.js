@@ -4,17 +4,17 @@ const fontkit = require('@pdf-lib/fontkit');
 const { StandardFonts } = require('pdf-lib');
 
 const DEFAULT_FONT_FILES = {
-  title: ['Exo2-Bold.ttf', 'Exo2-Bold.otf', 'Exo2[wght].ttf', 'Exo 2 - Bold.ttf', 'Exo 2 – Bold.ttf'],
+  title: ['Exo2-Bold.ttf', 'Exo2-Bold.otf', 'Exo2[wght].ttf', 'Exo 2 - Bold.ttf', 'Exo 2 – Bold.ttf', 'Exo2[wght].otf'],
   statNumbers: ['ElektraMediumPro-BoldItalic.ttf', 'Elektra Medium Pro - Bold Italic.ttf', 'Elektra Medium Pro – Bold Italic.ttf'],
   statAbbr: ['FuturaLTBT-ExtraBlack.ttf', 'Futura LT BT - ExtraBlack.ttf', 'Futura LT BT – ExtraBlack.ttf'],
   heroAlterEgo: ['FuturaCondensedBT-Medium.ttf', 'Futura Condensed BT - Medium.ttf', 'Futura Condensed BT – Medium.ttf'],
   traits: ['KomikaTitle-Regular.ttf', 'Komika Title - Regular.ttf', 'Komika Title – Regular.ttf'],
   abilityNames: ['AvenirNextLTPro-Italic.ttf', 'Avenir Next LT Pro - Italic.ttf', 'Avenir Next LT Pro – Italic.ttf'],
   abilityTypes: ['AvenirNextLTPro-Demi.ttf', 'Avenir Next LT Pro - Demi.ttf', 'Avenir Next LT Pro – Demi.ttf'],
-  body: ['AvenirNextLTPro-Regular.ttf', 'Avenir Next LT Pro - Regular.ttf', 'Avenir Next LT Pro – Regular.ttf'],
+  body: ['AvenirNextLTPro-Regular.ttf', 'AvenirNextLTPro-Regular.otf', 'Avenir Next LT Pro - Regular.ttf', 'Avenir Next LT Pro – Regular.ttf'],
   flavor: ['KomikaTextTight-Italic.ttf', 'Komika Text Tight - Italic.ttf', 'Komika Text Tight – Italic.ttf'],
   handSizeHp: ['FuturaCondensedBT-Medium.ttf', 'Futura Condensed BT - Medium.ttf', 'Futura Condensed BT – Medium.ttf'],
-  mouseprint: ['AvenirNextCondensed-Medium.ttf', 'Avenir Next Condensed - Medium.ttf', 'Avenir Next Condensed – Medium.ttf'],
+  mouseprint: ['AvenirNextCondensed-Medium.ttf', 'AvenirNextCondensed-Medium.otf', 'Avenir Next Condensed - Medium.ttf', 'Avenir Next Condensed – Medium.ttf'],
 };
 
 async function loadMarvelChampionsFonts(pdfDoc, options = {}) {
@@ -122,7 +122,9 @@ async function embedOrFallback(pdfDoc, filePath, fallbackFont) {
   if (!filePath) return fallbackFont;
   try {
     const bytes = await fs.promises.readFile(filePath);
-    return await pdfDoc.embedFont(bytes, { subset: true });
+    const isOtf = /\.otf$/i.test(filePath);
+    // Some OTF/CFF fonts have poor compatibility when subsetted; prefer full embedding for OTF.
+    return await pdfDoc.embedFont(bytes, { subset: !isOtf });
   } catch (_) {
     return fallbackFont;
   }

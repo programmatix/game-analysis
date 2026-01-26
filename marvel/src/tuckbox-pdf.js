@@ -4,6 +4,7 @@ const {
   PDFDocument,
   rgb,
   degrees,
+  StandardFonts,
   pushGraphicsState,
   popGraphicsState,
   moveTo,
@@ -44,6 +45,7 @@ async function buildTuckBoxPdf(options) {
     overrides: options.fontOverrides,
     neededKeys: ['title', 'body', 'heroAlterEgo', 'mouseprint'],
   });
+  const guideFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
   const pageFront = pdfDoc.addPage([mmToPt(layout.pageWidthMm), mmToPt(layout.pageHeightMm)]);
   const pageBack = duplex ? pdfDoc.addPage([mmToPt(layout.pageWidthMm), mmToPt(layout.pageHeightMm)]) : null;
@@ -110,22 +112,45 @@ async function buildTuckBoxPdf(options) {
 
   drawFrontText(pageFront, fonts, layout.body.front, { heroName, miscText }, palette);
   drawTopText(pageFront, fonts, layout.topFace, { heroName, miscText }, palette);
+  drawFrontGlueMarks(pageFront, { guideFont }, layout, palette, { duplex });
 
   if (pageBack) {
     drawGuides(pageBack, layout, palette);
-    drawLineLabels(pageBack, fonts, layout, palette);
-    drawZoneLabels(pageBack, fonts, layout, palette);
-    drawLegend(pageBack, fonts, layout, palette, { duplex: true });
+    drawLineLabels(pageBack, { guideFont }, layout, palette);
+    drawZoneLabels(pageBack, { guideFont }, layout, palette);
+    drawLegend(pageBack, { guideFont }, layout, palette, { duplex: true });
   } else {
     drawGlueLabel(pageFront, fonts, layout.body.glue, palette);
     drawGuides(pageFront, layout, palette);
-    drawLineLabels(pageFront, fonts, layout, palette);
-    drawZoneLabels(pageFront, fonts, layout, palette);
-    drawLegend(pageFront, fonts, layout, palette, { duplex: false });
+    drawLineLabels(pageFront, { guideFont }, layout, palette);
+    drawZoneLabels(pageFront, { guideFont }, layout, palette);
+    drawLegend(pageFront, { guideFont }, layout, palette, { duplex: false });
   }
 
   const pdfBytes = await pdfDoc.save();
   return { pdfBytes, layout, fontWarnings };
+}
+
+function drawFrontGlueMarks(page, { guideFont }, layout, palette, { duplex }) {
+  if (!duplex) return;
+  const zones = buildZoneLabels(layout);
+  for (const zone of zones) {
+    if (!zone.isGlue || zone.glueFace !== 'front') continue;
+    drawFrontGlueMark(page, guideFont, zone.rectMm, palette);
+  }
+}
+
+function drawFrontGlueMark(page, guideFont, rectMm, palette) {
+  const safe = insetRectMm(rectMm, 1.5);
+  if (safe.width <= 0 || safe.height <= 0) return;
+  const label = 'GLUE';
+  const sizeMm = fitTextSizeMm(guideFont, label, safe.width, Math.min(8, safe.height), 3);
+  drawCenteredTextOutlineMm(page, guideFont, label, safe, {
+    sizePt: mmToPt(sizeMm),
+    color: rgb(1, 1, 1),
+    outlineColor: rgb(0, 0, 0),
+    outlineOffsetMm: 0.35,
+  });
 }
 
 function drawBasePanels(page, layout, palette) {
@@ -317,10 +342,10 @@ function drawGuides(page, layout, palette) {
   }
 }
 
-function drawLineLabels(page, fonts, layout, palette) {
+function drawLineLabels(page, { guideFont }, layout, palette) {
   const segments = labelSegments(layout);
   for (const item of segments) {
-    drawLineLabel(page, fonts, item, palette);
+    drawLineLabel(page, guideFont, item, palette);
   }
 }
 
@@ -349,7 +374,7 @@ function labelSegments(layout) {
   return all.map((item, index) => ({ ...item, label: `L${index + 1}` }));
 }
 
-function drawLineLabel(page, fonts, { label, type, seg }, palette) {
+function drawLineLabel(page, guideFont, { label, type, seg }, palette) {
   const isH = seg.y1 === seg.y2;
   const midX = (seg.x1 + seg.x2) / 2;
   const midY = (seg.y1 + seg.y2) / 2;
@@ -362,8 +387,8 @@ function drawLineLabel(page, fonts, { label, type, seg }, palette) {
 
   const sizePt = mmToPt(sizeMm);
   const subSizePt = mmToPt(subSizeMm);
-  const textWPt = fonts.mouseprint.widthOfTextAtSize(label, sizePt);
-  const subWPt = fonts.mouseprint.widthOfTextAtSize(sub, subSizePt);
+  const textWPt = guideFont.widthOfTextAtSize(label, sizePt);
+  const subWPt = guideFont.widthOfTextAtSize(sub, subSizePt);
   const boxWPt = Math.max(textWPt, subWPt) + mmToPt(padMm * 2);
   const boxHPt = sizePt + subSizePt + mmToPt(padMm * 2) + mmToPt(0.5);
 
@@ -389,37 +414,58 @@ function drawLineLabel(page, fonts, { label, type, seg }, palette) {
 
   const textXPt = mmToPt(boxMm.x + boxMm.width / 2) - textWPt / 2;
   const topYPt = mmToPt(boxMm.y + boxMm.height) - mmToPt(padMm) - sizePt;
-  page.drawText(label, { x: textXPt, y: topYPt, size: sizePt, font: fonts.mouseprint, color });
+  page.drawText(label, { x: textXPt, y: topYPt, size: sizePt, font: guideFont, color });
 
   const subXPt = mmToPt(boxMm.x + boxMm.width / 2) - subWPt / 2;
   const subYPt = topYPt - subSizePt - mmToPt(0.4);
-  page.drawText(sub, { x: subXPt, y: subYPt, size: subSizePt, font: fonts.mouseprint, color });
+  page.drawText(sub, { x: subXPt, y: subYPt, size: subSizePt, font: guideFont, color });
 }
 
-function drawZoneLabels(page, fonts, layout, palette) {
+function drawZoneLabels(page, { guideFont }, layout, palette) {
   const zones = buildZoneLabels(layout);
   for (const zone of zones) {
-    if (shouldHideZoneLabel(zone.label)) continue;
-    drawZoneLabel(page, fonts, zone, palette);
+    drawZoneLabel(page, guideFont, zone, palette);
   }
-}
-
-function shouldHideZoneLabel(label) {
-  return label === 'ZG' || label === 'ZH' || label === 'ZK' || label === 'ZL';
 }
 
 function buildZoneLabels(layout) {
-  const rects = [];
+  const zones = [];
+  const zoneIds = new Map([
+    ['glue', 'ZA'],
+    ['back', 'ZB'],
+    ['side-left', 'ZC'],
+    ['front', 'ZD'],
+    ['side-right', 'ZE'],
+    ['top-back', 'ZF'],
+    ['top-side-left', 'ZG'],
+    ['top-side-right', 'ZH'],
+    ['bottom-back-tuck', 'ZI'],
+    ['bottom-side-left', 'ZJ'],
+    ['bottom-front', 'ZK'],
+    ['bottom-side-right', 'ZL'],
+    ['top-face', 'ZM'],
+    ['top-tuck-tab', 'ZN'],
+    ['bottom-tuck-tab', 'ZO'],
+  ]);
+
+  const pushRect = rectMm => {
+    const label = zoneIds.get(rectMm.id);
+    if (!label) return;
+    const isGlue = rectMm.id === 'glue';
+    zones.push({ rectMm, label, isGlue, glueFace: null });
+  };
+
   for (const r of layout.rects) {
+    // Hide the big combined tuck flap; we label the face + tuck tab separately.
     if (r.id === 'top-front-tuck') continue;
-    rects.push(r);
+    pushRect(r);
   }
 
-  rects.push(layout.topFace);
+  pushRect(layout.topFace);
 
   const topFrontTuck = layout.flaps?.topFrontTuck;
   if (topFrontTuck && topFrontTuck.height > layout.topFace.height) {
-    rects.push({
+    pushRect({
       id: 'top-tuck-tab',
       x: layout.topFace.x,
       y: layout.topFace.y + layout.topFace.height,
@@ -431,7 +477,7 @@ function buildZoneLabels(layout) {
   const bottomBackTuck = layout.flaps?.bottomBackTuck;
   const tuckExtraMm = Number(layout.dimensionsMm?.tuckExtraMm) || 0;
   if (bottomBackTuck && tuckExtraMm > 0 && bottomBackTuck.height > tuckExtraMm) {
-    rects.push({
+    pushRect({
       id: 'bottom-tuck-tab',
       x: bottomBackTuck.x,
       y: bottomBackTuck.y,
@@ -440,38 +486,32 @@ function buildZoneLabels(layout) {
     });
   }
 
-  return rects.map((rectMm, index) => {
-    const label = `Z${alphaIndex(index)}`;
-    const isGlue = rectMm.id === 'glue' || label === 'ZJ' || rectMm.id === 'bottom-tuck-tab';
-    const glueFace = label === 'ZJ' || rectMm.id === 'bottom-tuck-tab' ? 'front' : null;
-    return { rectMm, label, isGlue, glueFace };
-  });
+  for (const zone of zones) {
+    if (zone.label === 'ZJ' || zone.label === 'ZO') {
+      zone.isGlue = true;
+      zone.glueFace = 'front';
+    }
+  }
+
+  return zones;
 }
 
-function alphaIndex(index) {
-  const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-  if (index < letters.length) return letters[index];
-  const first = Math.floor(index / letters.length) - 1;
-  const second = index % letters.length;
-  return `${letters[first]}${letters[second]}`;
-}
-
-function drawZoneLabel(page, fonts, { rectMm, label, isGlue, glueFace }, palette) {
+function drawZoneLabel(page, guideFont, { rectMm, label, isGlue, glueFace }, palette) {
   const safe = insetRectMm(rectMm, 1.4);
   if (safe.width <= 0 || safe.height <= 0) return;
 
-  const zoneSizeMm = fitTextSizeMm(fonts.mouseprint, label, safe.width, Math.min(10, safe.height), 2.8);
+  const zoneSizeMm = fitTextSizeMm(guideFont, label, safe.width, Math.min(10, safe.height), 2.8);
   const zoneBox = { x: safe.x, y: safe.y + safe.height / 2 - zoneSizeMm * 0.8, width: safe.width, height: zoneSizeMm * 1.6 };
-  drawCenteredTextMm(page, fonts.mouseprint, label, zoneBox, {
+  drawCenteredTextMm(page, guideFont, label, zoneBox, {
     sizePt: mmToPt(zoneSizeMm),
     color: isGlue ? rgb(0.2, 0.2, 0.2) : rgb(0.1, 0.1, 0.1),
   });
 
-  if (!isGlue) return;
-  const glueText = glueFace === 'front' ? 'GLUE (FRONT)' : 'GLUE';
+  if (!isGlue || glueFace === 'front') return;
+  const glueText = 'GLUE';
   const subSizeMm = Math.min(3.1, zoneSizeMm * 0.68);
   const subBox = { x: safe.x, y: safe.y + 1, width: safe.width, height: subSizeMm * 1.6 };
-  drawWrappedTextMm(page, fonts.mouseprint, glueText, subBox, {
+  drawWrappedTextMm(page, guideFont, glueText, subBox, {
     sizePt: mmToPt(subSizeMm),
     color: rgb(0.25, 0.25, 0.25),
     align: 'center',
@@ -480,7 +520,7 @@ function drawZoneLabel(page, fonts, { rectMm, label, isGlue, glueFace }, palette
   });
 }
 
-function drawLegend(page, fonts, layout, palette, { duplex } = {}) {
+function drawLegend(page, { guideFont }, layout, palette, { duplex } = {}) {
   const paddingMm = 6;
   const legend = {
     x: paddingMm,
@@ -493,24 +533,24 @@ function drawLegend(page, fonts, layout, palette, { duplex } = {}) {
   drawRectMm(page, legend, { borderColor: palette.cut, borderWidthPt: 0.6 });
 
   const title = `Marvel Champions tuckbox (${layout.orientation} A4)${duplex ? ' duplex' : ''}`;
-  drawTextMm(page, fonts.mouseprint, title, { x: legend.x + 3, y: legend.y + legend.height - 7 }, { sizeMm: 3.2, color: palette.cut });
+  drawTextMm(page, guideFont, title, { x: legend.x + 3, y: legend.y + legend.height - 7 }, { sizeMm: 3.2, color: palette.cut });
 
   const dims = layout.dimensionsMm;
   const line1 = `Sleeve: ${format1(dims.sleeveHeightMm)}×${format1(dims.sleeveWidthMm)}mm • Thickness: ${format1(
     dims.thicknessMm
   )}mm`;
-  drawTextMm(page, fonts.mouseprint, line1, { x: legend.x + 3, y: legend.y + legend.height - 12 }, { sizeMm: 2.7, color: palette.cut });
+  drawTextMm(page, guideFont, line1, { x: legend.x + 3, y: legend.y + legend.height - 12 }, { sizeMm: 2.7, color: palette.cut });
 
   const cutY = legend.y + 6.5;
   drawSolidLineMm(page, { x1: legend.x + 3, y1: cutY, x2: legend.x + 18, y2: cutY }, { color: palette.cut, thicknessPt: 0.8 });
-  drawTextMm(page, fonts.mouseprint, 'Cut', { x: legend.x + 20, y: cutY - 1 }, { sizeMm: 2.8, color: palette.cut });
+  drawTextMm(page, guideFont, 'Cut', { x: legend.x + 20, y: cutY - 1 }, { sizeMm: 2.8, color: palette.cut });
 
   const foldY = legend.y + 3;
   drawDashedLineMm(page, { x1: legend.x + 3, y1: foldY, x2: legend.x + 18, y2: foldY }, { color: palette.fold, thicknessPt: 0.6, dashMm: [2, 1.5] });
-  drawTextMm(page, fonts.mouseprint, 'Fold', { x: legend.x + 20, y: foldY - 1 }, { sizeMm: 2.8, color: palette.cut });
+  drawTextMm(page, guideFont, 'Fold', { x: legend.x + 20, y: foldY - 1 }, { sizeMm: 2.8, color: palette.cut });
 
   if (duplex) {
-    drawTextMm(page, fonts.mouseprint, 'Back side: cut/fold + ZA/L# labels', { x: legend.x + 3, y: legend.y + 1.2 }, { sizeMm: 2.6, color: palette.cut });
+    drawTextMm(page, guideFont, 'Back side: cut/fold + ZA/L# labels', { x: legend.x + 3, y: legend.y + 1.2 }, { sizeMm: 2.6, color: palette.cut });
   }
 }
 
