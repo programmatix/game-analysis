@@ -149,6 +149,9 @@ function buildDecklistLines(deck, lookup, cardIndex, options = {}) {
   }
 
   const entries = onlyHeroEncounter ? [] : collectDeckEntries(deck);
+  if (!onlyHeroEncounter && includeHeroKit) {
+    appendHeroPackHeroFactionEntries(entries, deck, lookup, cardIndex, { defaultFace, warnings });
+  }
   if (!onlyHeroEncounter && !includeHeroKit) {
     const filtered = filterHeroKitEntries(entries, deck, lookup, cardIndex, { defaultFace, warnings });
     entries.length = 0;
@@ -180,6 +183,78 @@ function buildDecklistLines(deck, lookup, cardIndex, options = {}) {
   }
 
   return { lines, warnings };
+}
+
+function appendHeroPackHeroFactionEntries(entries, deck, lookup, cardIndex, options = {}) {
+  const defaultFace = options.defaultFace || 'a';
+  const warnings = Array.isArray(options.warnings) ? options.warnings : [];
+
+  const heroCode = deck?.hero_code ? String(deck.hero_code).trim() : '';
+  if (!heroCode) {
+    warnings.push('Warning: Deck has no hero_code, so hero kit cards could not be completed.');
+    return;
+  }
+
+  let heroCard;
+  try {
+    heroCard = resolveCard({ code: heroCode }, lookup, cardIndex, { defaultFace });
+  } catch (err) {
+    warnings.push(
+      `Warning: Could not resolve hero code "${heroCode}" to complete hero kit cards: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+    return;
+  }
+
+  const heroPackCode = heroCard?.pack_code ? String(heroCard.pack_code).trim() : '';
+  const heroSetCode = heroCard?.card_set_code ? String(heroCard.card_set_code).trim() : '';
+  if (!heroPackCode) {
+    warnings.push(`Warning: Hero "${heroCard?.name || heroCode}" has no pack_code; cannot find side-deck cards like Weather/Invocation decks.`);
+    return;
+  }
+
+  const existingCounts = new Map();
+  for (const entry of Array.isArray(entries) ? entries : []) {
+    const code = String(entry?.code || '').trim();
+    if (!code) continue;
+    const count = Number(entry?.count) || 0;
+    existingCounts.set(code, (existingCounts.get(code) || 0) + count);
+  }
+
+  const toAdd = [];
+
+  for (const card of cardIndex instanceof Map ? cardIndex.values() : []) {
+    if (!card?.code) continue;
+    if (String(card.pack_code || '').trim() !== heroPackCode) continue;
+    if (String(card.faction_code || '').trim().toLowerCase() !== 'hero') continue;
+
+    const typeCode = String(card.type_code || '').trim().toLowerCase();
+    if (!typeCode || typeCode === 'hero' || typeCode === 'alter_ego' || typeCode === 'obligation') continue;
+
+    const code = String(card.code).trim();
+    if (!code) continue;
+
+    const quantityRaw = Number(card.quantity);
+    const desiredCount = Number.isFinite(quantityRaw) && quantityRaw > 0 ? Math.floor(quantityRaw) : 1;
+    const already = existingCounts.get(code) || 0;
+    const needed = Math.max(0, desiredCount - already);
+    if (needed <= 0) continue;
+
+    const cardSetCode = card?.card_set_code ? String(card.card_set_code).trim() : '';
+    const isSideDeck = Boolean(heroSetCode && cardSetCode && cardSetCode !== heroSetCode);
+    toAdd.push({
+      code,
+      count: needed,
+      ignoreForDeckLimit: isSideDeck && already === 0,
+    });
+  }
+
+  if (!toAdd.length) return;
+
+  const merged = dedupeEntries([...(Array.isArray(entries) ? entries : []), ...toAdd]);
+  entries.length = 0;
+  entries.push(...merged);
 }
 
 function filterHeroKitEntries(entries, deck, lookup, cardIndex, options = {}) {

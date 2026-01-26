@@ -91,16 +91,27 @@ test('marvel-download: --no-hero omits hero and alter-ego', async () => {
       type_code: 'hero',
       card_set_code: 'testhero',
       linked_to_code: '01001b',
+      pack_code: 'testhero',
     },
     {
       code: '01001b',
       name: 'Test Alter Ego',
       type_code: 'alter_ego',
       card_set_code: 'testhero',
+      pack_code: 'testhero',
     },
     { code: '01002', name: 'Backflip', type_code: 'event' },
     { code: '01003', name: 'Some Ally', type_code: 'ally' },
-    { code: '01004', name: 'Signature Ally', type_code: 'ally', card_set_code: 'testhero' },
+    { code: '01004', name: 'Signature Ally', type_code: 'ally', card_set_code: 'testhero', pack_code: 'testhero' },
+    {
+      code: '01005',
+      name: 'Set Aside Thing',
+      type_code: 'support',
+      faction_code: 'hero',
+      pack_code: 'testhero',
+      card_set_code: 'testhero_side',
+      quantity: 1,
+    },
   ];
 
   const routes = new Map();
@@ -132,12 +143,14 @@ test('marvel-download: --no-hero omits hero and alter-ego', async () => {
     assert.match(baseline.stdout, /\[01002\]/);
     assert.match(baseline.stdout, /\[01003\]/);
     assert.match(baseline.stdout, /\[01004\]/);
+    assert.match(baseline.stdout, /Set Aside Thing\[01005\]\[ignoreForDeckLimit\]/);
 
     const filtered = await runDownloadCli(['1', '--base-url', baseUrl, '--data-cache', dataCache, '--no-header', '--no-hero']);
     assert.equal(filtered.status, 0, `filtered failed: ${filtered.stderr}`);
     assert.doesNotMatch(filtered.stdout, /\[01001a\]/);
     assert.doesNotMatch(filtered.stdout, /\[01001b\]/);
     assert.doesNotMatch(filtered.stdout, /\[01004\]/);
+    assert.doesNotMatch(filtered.stdout, /\[01005\]/);
     assert.match(filtered.stdout, /\[01002\]/);
     assert.match(filtered.stdout, /\[01003\]/);
   } finally {

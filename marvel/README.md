@@ -38,6 +38,42 @@ Useful flags:
 - Use `[skipproxy]` or `[skipback]` on a line to omit that card or its back (the latter only matters with `--include-backs`).
 - Proxy PDFs include a 2mm black bleed beyond the cut marks.
 
+### Tuckbox generator
+
+Generate a single-sheet A4 tuckbox net sized for sleeved Marvel Champions cards (defaults to `91×66mm` sleeves). The deck thickness is configurable:
+
+```bash
+npx marvel-tuckbox --hero "Cyclops" --text "Leadership\\nAggression" --thickness-mm 32 --output cyclops-tuckbox.pdf
+```
+
+Useful flags:
+
+- `--art` sets front/top art (default: `assets/cyclops/image.png`).
+- `--front-art-offset-x-mm/--front-art-offset-y-mm` adjusts front art cropping.
+- `--top-art-offset-x-mm/--top-art-offset-y-mm` adjusts top art cropping.
+- `--logo` sets the Marvel Champions logo image (default: `assets/logo.png`); use `--no-logo` to disable.
+- `--back` sets the back-panel image (default: `assets/cardback.png`).
+- `--fonts-dir` and `--font-config` load the official Marvel Champions fonts when you have them locally (otherwise it falls back to Helvetica).
+- `--orientation auto|portrait|landscape` selects A4 orientation; `auto` picks the first that fits.
+
+### Font sheet
+
+Generate a one-page PDF showing samples for all configured Marvel Champions fonts:
+
+```bash
+npx marvel-font-sheet --output marvel-fonts.pdf
+```
+
+`--font-config` accepts a JSON object mapping these keys to local font files (TTF/OTF): `title`, `statNumbers`, `statAbbr`, `heroAlterEgo`, `traits`, `abilityNames`, `abilityTypes`, `body`, `flavor`, `handSizeHp`, `mouseprint`.
+
+### Download open fonts
+
+Some fonts are free/open-licensed (for example, Exo 2). Download supported open font families into `assets/fonts/`:
+
+```bash
+npx marvel-fonts-download exo2
+```
+
 ### Deck annotator
 
 Adds inline comments (prefixed with `//?`) with type/aspect, cost, stats, traits, and rules text for each card. Re-running replaces any previous `//?` annotations:
@@ -77,7 +113,7 @@ Supported `--type` codes: `ally`, `alter_ego`, `attachment`, `environment`, `eve
 
 ### Download decklists from MarvelCDB
 
-Download a published decklist (by id or URL) and emit a normalized list in this repo’s deck format (one card per line, with `[code]` tags). The hero + linked alter-ego are included as `[ignoreForDeckLimit]` entries:
+Download a published decklist (by id or URL) and emit a normalized list in this repo’s deck format (one card per line, with `[code]` tags). The hero + linked alter-ego are included as `[ignoreForDeckLimit]` entries. Set-aside hero side decks (e.g. Storm’s Weather deck, Doctor Strange’s Invocation deck) are also included as `[ignoreForDeckLimit]`:
 
 ```bash
 npx marvel-download 40979 | npx marvel-proxy
@@ -98,19 +134,14 @@ Generate a deck list containing all cards from a given Marvel Champions pack (us
 ```bash
 npx marvel-pack --list-packs
 npx marvel-pack bkw --hero-specific > ../../game-decks/marvel/packs/cycle1/bkw.txt
+npx marvel-pack "NeXt Evolution" --list-sets
+npx marvel-pack next_evol --kind scenario --set juggernaut
 ```
 
 `--kind auto` (the default) outputs:
 - `hero` when a pack only has player cards
 - `scenario` when a pack only has encounter cards
 - `all` when a pack contains both
-
-To output a specific encounter/module set within a pack:
-
-```bash
-npx marvel-pack "NeXt Evolution" --list-sets
-npx marvel-pack next_evol --kind scenario --set juggernaut
-```
 
 When `--kind scenario` is used with a villain set (e.g. `--set magneto_villain`), `marvel-pack` also includes that villain’s recommended modular set by default. Use `--no-recommended-modular` to disable.
 
