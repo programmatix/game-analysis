@@ -36,6 +36,7 @@ const PDF_OPS = {
 
 async function buildTuckBoxPdf(options) {
   const layout = computeTuckBoxLayout(options);
+  const duplex = options.duplex !== false;
 
   const pdfDoc = await PDFDocument.create();
   const { fonts, warnings: fontWarnings } = await loadMarvelChampionsFonts(pdfDoc, {
@@ -44,35 +45,48 @@ async function buildTuckBoxPdf(options) {
     neededKeys: ['title', 'body', 'heroAlterEgo', 'mouseprint'],
   });
 
-  const page = pdfDoc.addPage([mmToPt(layout.pageWidthMm), mmToPt(layout.pageHeightMm)]);
+  const pageFront = pdfDoc.addPage([mmToPt(layout.pageWidthMm), mmToPt(layout.pageHeightMm)]);
+  const pageBack = duplex ? pdfDoc.addPage([mmToPt(layout.pageWidthMm), mmToPt(layout.pageHeightMm)]) : null;
 
   const palette = {
     background: rgb(0.05, 0.06, 0.08),
     panel: rgb(0.09, 0.1, 0.13),
+    marvelBlue: rgb(28 / 255, 74 / 255, 112 / 255),
     fold: rgb(0.55, 0.55, 0.55),
     cut: rgb(0, 0, 0),
     accent: parseHexColor(options.accent || '#f7d117', rgb(0.97, 0.82, 0.09)),
     white: rgb(1, 1, 1),
   };
 
-  page.drawRectangle({
+  pageFront.drawRectangle({
     x: 0,
     y: 0,
-    width: page.getWidth(),
-    height: page.getHeight(),
+    width: pageFront.getWidth(),
+    height: pageFront.getHeight(),
     color: rgb(1, 1, 1),
   });
 
-  drawBasePanels(page, layout, palette);
+  if (pageBack) {
+    pageBack.drawRectangle({
+      x: 0,
+      y: 0,
+      width: pageBack.getWidth(),
+      height: pageBack.getHeight(),
+      color: rgb(1, 1, 1),
+    });
+  }
+
+  drawBasePanels(pageFront, layout, palette);
+  if (pageBack) drawBackSideBase(pageBack, layout, palette);
 
   const imageCache = new Map();
   const artPath = resolveOptionalPath(options.artPath || options.art, defaultCyclopsArtPath());
   if (artPath) {
     const embeddedArt = await embedImage(pdfDoc, artPath, imageCache);
-    drawFrontArt(page, embeddedArt, layout.body.front, palette, {
+    drawFrontArt(pageFront, embeddedArt, layout.body.front, palette, {
       offsetsMm: { x: Number(options.frontArtOffsetXMm) || 0, y: Number(options.frontArtOffsetYMm) || 0 },
     });
-    drawTopArt(page, embeddedArt, layout.topFace, palette, {
+    drawTopArt(pageFront, embeddedArt, layout.topFace, palette, {
       offsetsMm: { x: Number(options.topArtOffsetXMm) || 0, y: Number(options.topArtOffsetYMm) || 0 },
     });
   }
@@ -80,7 +94,7 @@ async function buildTuckBoxPdf(options) {
   const backPath = resolveOptionalPath(options.backPath || options.backArt || options.back, defaultCardBackPath());
   if (backPath) {
     const embeddedBack = await embedImage(pdfDoc, backPath, imageCache);
-    drawBackArt(page, embeddedBack, layout.body.back, palette);
+    drawBackArt(pageFront, embeddedBack, layout.body.back, palette, { duplex });
   }
 
   const heroName = String(options.heroName || options.hero || '').trim();
@@ -90,18 +104,25 @@ async function buildTuckBoxPdf(options) {
     const logoPath = resolveOptionalPath(options.logoPath || options.logo, defaultLogoPath());
     if (logoPath) {
       const embeddedLogo = await embedImage(pdfDoc, logoPath, imageCache);
-      drawFrontLogoImage(page, embeddedLogo, layout.body.front);
+      drawFrontLogoImage(pageFront, embeddedLogo, layout.body.front);
     }
   }
 
-  drawFrontText(page, fonts, layout.body.front, { heroName, miscText }, palette);
-  drawTopText(page, fonts, layout.topFace, { heroName, miscText }, palette);
-  drawSpineText(page, fonts, layout.body.sideLeft, { heroName }, palette, { flip: false });
-  drawSpineText(page, fonts, layout.body.sideRight, { heroName }, palette, { flip: true });
-  drawGlueLabel(page, fonts, layout.body.glue, palette);
+  drawFrontText(pageFront, fonts, layout.body.front, { heroName, miscText }, palette);
+  drawTopText(pageFront, fonts, layout.topFace, { heroName, miscText }, palette);
 
-  drawGuides(page, layout, palette);
-  drawLegend(page, fonts, layout, palette);
+  if (pageBack) {
+    drawGuides(pageBack, layout, palette);
+    drawLineLabels(pageBack, fonts, layout, palette);
+    drawZoneLabels(pageBack, fonts, layout, palette);
+    drawLegend(pageBack, fonts, layout, palette, { duplex: true });
+  } else {
+    drawGlueLabel(pageFront, fonts, layout.body.glue, palette);
+    drawGuides(pageFront, layout, palette);
+    drawLineLabels(pageFront, fonts, layout, palette);
+    drawZoneLabels(pageFront, fonts, layout, palette);
+    drawLegend(pageFront, fonts, layout, palette, { duplex: false });
+  }
 
   const pdfBytes = await pdfDoc.save();
   return { pdfBytes, layout, fontWarnings };
@@ -110,7 +131,9 @@ async function buildTuckBoxPdf(options) {
 function drawBasePanels(page, layout, palette) {
   for (const r of layout.rects) {
     const isGlue = r.id === 'glue';
-    const fill = isGlue ? rgb(0.96, 0.96, 0.96) : palette.panel;
+    const isSide = r.id === 'side-left' || r.id === 'side-right';
+    const isBottom = r.id.startsWith('bottom-');
+    const fill = isGlue ? rgb(0.96, 0.96, 0.96) : isSide || isBottom ? palette.marvelBlue : palette.panel;
     const opacity = isGlue ? 1 : 1;
     drawRectMm(page, r, { color: fill, opacity });
   }
@@ -131,6 +154,14 @@ function drawBasePanels(page, layout, palette) {
   }
 }
 
+function drawBackSideBase(page, layout, palette) {
+  for (const r of layout.rects) {
+    const isGlue = r.id === 'glue';
+    const fill = isGlue ? rgb(0.95, 0.95, 0.95) : rgb(1, 1, 1);
+    drawRectMm(page, r, { color: fill, opacity: 1 });
+  }
+}
+
 function drawFrontArt(page, embeddedImage, rectMm, palette, { offsetsMm } = {}) {
   const paddingMm = 0;
   const target = insetRectMm(rectMm, paddingMm);
@@ -146,9 +177,9 @@ function drawTopArt(page, embeddedImage, rectMm, palette, { offsetsMm } = {}) {
   drawRectMm(page, rectMm, { borderColor: palette.accent, borderWidthPt: 1.2 });
 }
 
-function drawBackArt(page, embeddedImage, rectMm, palette) {
+function drawBackArt(page, embeddedImage, rectMm, palette, { duplex } = {}) {
   drawImageCoverMm(page, embeddedImage, rectMm, { clipRadiusMm: 0, opacity: 1 });
-  drawRectMm(page, rectMm, { borderColor: palette.cut, borderWidthPt: 0.8 });
+  if (!duplex) drawRectMm(page, rectMm, { borderColor: palette.cut, borderWidthPt: 0.8 });
 }
 
 function drawFrontLogoImage(page, embeddedImage, frontMm) {
@@ -161,8 +192,8 @@ function drawFrontLogoImage(page, embeddedImage, frontMm) {
 
 function drawFrontText(page, fonts, frontMm, { heroName, miscText }, palette) {
   const bottomBandMm = Math.max(22, frontMm.height * 0.28);
-  const band = { x: frontMm.x, y: frontMm.y, width: frontMm.width, height: bottomBandMm };
-  drawRectMm(page, band, { color: palette.background, opacity: 0.75 });
+  const liftMm = 6;
+  const band = { x: frontMm.x, y: frontMm.y + liftMm, width: frontMm.width, height: bottomBandMm };
 
   const safe = insetRectMm(band, 3);
   const title = heroName || 'Hero';
@@ -170,6 +201,12 @@ function drawFrontText(page, fonts, frontMm, { heroName, miscText }, palette) {
   const titleHeightMm = titleSizeMm * 1.15;
 
   const titleBox = { x: safe.x, y: safe.y + safe.height - titleHeightMm - 1, width: safe.width, height: titleHeightMm + 1 };
+  drawCenteredTextShadowMm(page, fonts.title, title, titleBox, {
+    sizePt: mmToPt(titleSizeMm),
+    color: palette.white,
+    shadowColor: rgb(0, 0, 0),
+    shadowOffsetMm: { x: 0.5, y: -0.5 },
+  });
   drawCenteredTextMm(page, fonts.title, title, titleBox, {
     sizePt: mmToPt(titleSizeMm),
     color: palette.white,
@@ -178,6 +215,14 @@ function drawFrontText(page, fonts, frontMm, { heroName, miscText }, palette) {
   if (!miscText.lines.length) return;
   const miscFontMm = Math.min(5.2, titleSizeMm * 0.45);
   const miscBox = { x: safe.x, y: safe.y + 1, width: safe.width, height: safe.height - titleHeightMm - 2 };
+  drawWrappedTextShadowMm(page, fonts.body, miscText.lines.join('\n'), miscBox, {
+    sizePt: mmToPt(miscFontMm),
+    color: rgb(0.95, 0.95, 0.95),
+    shadowColor: rgb(0, 0, 0),
+    shadowOffsetMm: { x: 0.35, y: -0.35 },
+    align: 'center',
+    maxLines: 3,
+  });
   drawWrappedTextMm(page, fonts.body, miscText.lines.join('\n'), miscBox, {
     sizePt: mmToPt(miscFontMm),
     color: rgb(0.95, 0.95, 0.95),
@@ -191,7 +236,8 @@ function drawTopText(page, fonts, topFaceMm, { heroName, miscText }, palette) {
 
   const title = heroName || 'Hero';
   const titleSizeMm = fitTextSizeMm(fonts.title, title, inset.width, 8, 3.5);
-  const titleBox = { x: inset.x, y: inset.y + inset.height - titleSizeMm * 1.2, width: inset.width, height: titleSizeMm * 1.2 };
+  const titleHeightMm = titleSizeMm * 1.12;
+  const titleBox = { x: inset.x, y: inset.y + inset.height - titleHeightMm, width: inset.width, height: titleHeightMm };
   drawCenteredTextShadowMm(page, fonts.title, title, titleBox, {
     sizePt: mmToPt(titleSizeMm),
     color: palette.white,
@@ -207,12 +253,13 @@ function drawTopText(page, fonts, topFaceMm, { heroName, miscText }, palette) {
 
   if (!miscText.lines.length) return;
   const miscSizeMm = Math.min(3.6, titleSizeMm * 0.55);
-  const miscBox = { x: inset.x, y: inset.y, width: inset.width, height: inset.height - titleSizeMm * 1.15 };
+  const miscBox = { x: inset.x, y: inset.y, width: inset.width, height: inset.height - titleHeightMm + 0.5 };
   drawWrappedTextMm(page, fonts.body, miscText.lines.join('\n'), miscBox, {
     sizePt: mmToPt(miscSizeMm),
     color: rgb(0.92, 0.92, 0.92),
     align: 'center',
     maxLines: 2,
+    valign: 'top',
   });
 }
 
@@ -273,19 +320,171 @@ function drawGuides(page, layout, palette) {
   }
 }
 
-function drawLegend(page, fonts, layout, palette) {
+function drawLineLabels(page, fonts, layout, palette) {
+  const segments = labelSegments(layout);
+  for (const item of segments) {
+    drawLineLabel(page, fonts, item, palette);
+  }
+}
+
+function labelSegments(layout) {
+  const all = [];
+  for (const seg of layout.segments.cut) all.push({ type: 'cut', seg });
+  for (const seg of layout.segments.fold) all.push({ type: 'fold', seg });
+
+  all.sort((a, b) => {
+    const aIsH = a.seg.y1 === a.seg.y2;
+    const bIsH = b.seg.y1 === b.seg.y2;
+    if (aIsH !== bIsH) return aIsH ? -1 : 1;
+    const aFixed = aIsH ? a.seg.y1 : a.seg.x1;
+    const bFixed = bIsH ? b.seg.y1 : b.seg.x1;
+    if (aFixed !== bFixed) return aFixed - bFixed;
+    const aA = aIsH ? a.seg.x1 : a.seg.y1;
+    const bA = bIsH ? b.seg.x1 : b.seg.y1;
+    if (aA !== bA) return aA - bA;
+    const aB = aIsH ? a.seg.x2 : a.seg.y2;
+    const bB = bIsH ? b.seg.x2 : b.seg.y2;
+    if (aB !== bB) return aB - bB;
+    if (a.type !== b.type) return a.type === 'cut' ? -1 : 1;
+    return 0;
+  });
+
+  return all.map((item, index) => ({ ...item, label: `L${index + 1}` }));
+}
+
+function drawLineLabel(page, fonts, { label, type, seg }, palette) {
+  const isH = seg.y1 === seg.y2;
+  const midX = (seg.x1 + seg.x2) / 2;
+  const midY = (seg.y1 + seg.y2) / 2;
+  const color = type === 'cut' ? palette.cut : palette.fold;
+  const sub = type === 'cut' ? 'CUT' : 'FOLD';
+
+  const sizeMm = 2.8;
+  const subSizeMm = 2.2;
+  const padMm = 0.8;
+
+  const sizePt = mmToPt(sizeMm);
+  const subSizePt = mmToPt(subSizeMm);
+  const textWPt = fonts.mouseprint.widthOfTextAtSize(label, sizePt);
+  const subWPt = fonts.mouseprint.widthOfTextAtSize(sub, subSizePt);
+  const boxWPt = Math.max(textWPt, subWPt) + mmToPt(padMm * 2);
+  const boxHPt = sizePt + subSizePt + mmToPt(padMm * 2) + mmToPt(0.5);
+
+  const offsetMm = 1.2;
+  const anchorMm = isH ? { x: midX, y: midY + offsetMm } : { x: midX + offsetMm, y: midY };
+  let boxMm = {
+    x: anchorMm.x - ptToMm(boxWPt) / 2,
+    y: anchorMm.y - ptToMm(boxHPt) / 2,
+    width: ptToMm(boxWPt),
+    height: ptToMm(boxHPt),
+  };
+
+  const pageWidthMm = ptToMm(page.getWidth());
+  const pageHeightMm = ptToMm(page.getHeight());
+  boxMm = {
+    ...boxMm,
+    x: Math.max(0, Math.min(boxMm.x, pageWidthMm - boxMm.width)),
+    y: Math.max(0, Math.min(boxMm.y, pageHeightMm - boxMm.height)),
+  };
+
+  drawRectMm(page, boxMm, { color: rgb(1, 1, 1), opacity: 0.85 });
+  drawRectMm(page, boxMm, { borderColor: color, borderWidthPt: 0.4 });
+
+  const textXPt = mmToPt(boxMm.x + boxMm.width / 2) - textWPt / 2;
+  const topYPt = mmToPt(boxMm.y + boxMm.height) - mmToPt(padMm) - sizePt;
+  page.drawText(label, { x: textXPt, y: topYPt, size: sizePt, font: fonts.mouseprint, color });
+
+  const subXPt = mmToPt(boxMm.x + boxMm.width / 2) - subWPt / 2;
+  const subYPt = topYPt - subSizePt - mmToPt(0.4);
+  page.drawText(sub, { x: subXPt, y: subYPt, size: subSizePt, font: fonts.mouseprint, color });
+}
+
+function drawZoneLabels(page, fonts, layout, palette) {
+  const zones = buildZoneLabels(layout);
+  for (const zone of zones) {
+    drawZoneLabel(page, fonts, zone, palette);
+  }
+}
+
+function buildZoneLabels(layout) {
+  const rects = [];
+  for (const r of layout.rects) {
+    if (r.id === 'top-front-tuck') continue;
+    rects.push(r);
+  }
+
+  rects.push(layout.topFace);
+
+  const topFrontTuck = layout.flaps?.topFrontTuck;
+  if (topFrontTuck && topFrontTuck.height > layout.topFace.height) {
+    rects.push({
+      id: 'top-tuck-tab',
+      x: layout.topFace.x,
+      y: layout.topFace.y + layout.topFace.height,
+      width: layout.topFace.width,
+      height: topFrontTuck.height - layout.topFace.height,
+    });
+  }
+
+  return rects.map((rectMm, index) => ({
+    rectMm,
+    label: `Z${alphaIndex(index)}`,
+    isGlue: rectMm.id === 'glue',
+  }));
+}
+
+function alphaIndex(index) {
+  const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  if (index < letters.length) return letters[index];
+  const first = Math.floor(index / letters.length) - 1;
+  const second = index % letters.length;
+  return `${letters[first]}${letters[second]}`;
+}
+
+function drawZoneLabel(page, fonts, { rectMm, label, isGlue }, palette) {
+  const safe = insetRectMm(rectMm, 1.4);
+  if (safe.width <= 0 || safe.height <= 0) return;
+
+  if (isGlue) {
+    const hatchStepMm = 4;
+    for (let x = rectMm.x - rectMm.height; x <= rectMm.x + rectMm.width; x += hatchStepMm) {
+      drawSolidLineMm(
+        page,
+        { x1: x, y1: rectMm.y, x2: x + rectMm.height, y2: rectMm.y + rectMm.height },
+        { color: rgb(0.7, 0.7, 0.7), thicknessPt: 0.4, opacity: 0.5 }
+      );
+    }
+  }
+
+  const zoneSizeMm = fitTextSizeMm(fonts.mouseprint, label, safe.width, Math.min(10, safe.height), 2.8);
+  const zoneBox = { x: safe.x, y: safe.y + safe.height / 2 - zoneSizeMm * 0.8, width: safe.width, height: zoneSizeMm * 1.6 };
+  drawCenteredTextMm(page, fonts.mouseprint, label, zoneBox, {
+    sizePt: mmToPt(zoneSizeMm),
+    color: isGlue ? rgb(0.2, 0.2, 0.2) : rgb(0.1, 0.1, 0.1),
+  });
+
+  if (!isGlue) return;
+  const subSizeMm = Math.min(3.2, zoneSizeMm * 0.7);
+  const subBox = { x: safe.x, y: safe.y + 1, width: safe.width, height: subSizeMm * 1.4 };
+  drawCenteredTextMm(page, fonts.mouseprint, 'GLUE', subBox, {
+    sizePt: mmToPt(subSizeMm),
+    color: rgb(0.25, 0.25, 0.25),
+  });
+}
+
+function drawLegend(page, fonts, layout, palette, { duplex } = {}) {
   const paddingMm = 6;
   const legend = {
     x: paddingMm,
     y: paddingMm,
     width: 70,
-    height: 22,
+    height: duplex ? 30 : 22,
   };
 
   drawRectMm(page, legend, { color: rgb(1, 1, 1), opacity: 0.9 });
   drawRectMm(page, legend, { borderColor: palette.cut, borderWidthPt: 0.6 });
 
-  const title = `Marvel Champions tuckbox (${layout.orientation} A4)`;
+  const title = `Marvel Champions tuckbox (${layout.orientation} A4)${duplex ? ' duplex' : ''}`;
   drawTextMm(page, fonts.mouseprint, title, { x: legend.x + 3, y: legend.y + legend.height - 7 }, { sizeMm: 3.2, color: palette.cut });
 
   const dims = layout.dimensionsMm;
@@ -301,6 +500,10 @@ function drawLegend(page, fonts, layout, palette) {
   const foldY = legend.y + 3;
   drawDashedLineMm(page, { x1: legend.x + 3, y1: foldY, x2: legend.x + 18, y2: foldY }, { color: palette.fold, thicknessPt: 0.6, dashMm: [2, 1.5] });
   drawTextMm(page, fonts.mouseprint, 'Fold', { x: legend.x + 20, y: foldY - 1 }, { sizeMm: 2.8, color: palette.cut });
+
+  if (duplex) {
+    drawTextMm(page, fonts.mouseprint, 'Back side: cut/fold + ZA/L# labels', { x: legend.x + 3, y: legend.y + 1.2 }, { sizeMm: 2.6, color: palette.cut });
+  }
 }
 
 function drawDiagonalStripes(page, rectMm, palette, { densityMm, alpha }) {
@@ -444,7 +647,7 @@ function drawCenteredTextShadowMm(page, font, text, rectMm, { sizePt, color, sha
   });
 }
 
-function drawWrappedTextMm(page, font, text, rectMm, { sizePt, color, align = 'left', maxLines = null } = {}) {
+function drawWrappedTextMm(page, font, text, rectMm, { sizePt, color, align = 'left', maxLines = null, valign = 'center' } = {}) {
   const size = Number(sizePt) || mmToPt(3);
   const maxWidthPt = mmToPt(rectMm.width);
   const lines = wrapText(font, String(text || ''), size, maxWidthPt);
@@ -452,7 +655,14 @@ function drawWrappedTextMm(page, font, text, rectMm, { sizePt, color, align = 'l
 
   const lineHeight = size * 1.18;
   const blockHeight = finalLines.length * lineHeight;
-  let cursorY = mmToPt(rectMm.y + rectMm.height / 2) + blockHeight / 2 - lineHeight;
+  let cursorY;
+  if (valign === 'top') {
+    cursorY = mmToPt(rectMm.y + rectMm.height) - lineHeight;
+  } else if (valign === 'bottom') {
+    cursorY = mmToPt(rectMm.y) + blockHeight - lineHeight;
+  } else {
+    cursorY = mmToPt(rectMm.y + rectMm.height / 2) + blockHeight / 2 - lineHeight;
+  }
 
   for (const line of finalLines) {
     const w = font.widthOfTextAtSize(line, size);
@@ -467,6 +677,26 @@ function drawWrappedTextMm(page, font, text, rectMm, { sizePt, color, align = 'l
     page.drawText(line, { x, y: cursorY, size, font, color: color || rgb(0, 0, 0) });
     cursorY -= lineHeight;
   }
+}
+
+function drawWrappedTextShadowMm(page, font, text, rectMm, { sizePt, color, shadowColor, shadowOffsetMm, align = 'left', maxLines = null, valign = 'center' } = {}) {
+  const offsetX = Number(shadowOffsetMm?.x) || 0;
+  const offsetY = Number(shadowOffsetMm?.y) || 0;
+  const shadow = { ...rectMm, x: rectMm.x + offsetX, y: rectMm.y + offsetY };
+  drawWrappedTextMm(page, font, text, shadow, {
+    sizePt,
+    color: shadowColor || rgb(0, 0, 0),
+    align,
+    maxLines,
+    valign,
+  });
+  drawWrappedTextMm(page, font, text, rectMm, {
+    sizePt,
+    color: color || rgb(1, 1, 1),
+    align,
+    maxLines,
+    valign,
+  });
 }
 
 function drawTextMm(page, font, text, atMm, { sizeMm, color } = {}) {

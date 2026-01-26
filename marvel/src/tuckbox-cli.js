@@ -9,8 +9,8 @@ async function main() {
   const program = new Command();
   program
     .name('marvel-tuckbox')
-    .description('Generate a printable A4 tuckbox template for Marvel Champions decks')
-    .requiredOption('--hero <name>', 'Hero name (shown on front/top/spines)')
+    .description('Generate a printable A4 tuckbox template for Marvel Champions decks (defaults to duplex: outside + marks)')
+    .requiredOption('--hero <name>', 'Hero name (shown on front/top)')
     .option('--text <text>', 'Misc text (supports literal \\n for line breaks)', '')
     .option('--thickness-mm <number>', 'Deck thickness in millimetres', '30')
     .option('--sleeve-width-mm <number>', 'Sleeve width in millimetres', '66')
@@ -28,6 +28,7 @@ async function main() {
     .option('--logo <file>', 'Marvel Champions logo image (PNG/JPG). Defaults to assets/logo.png', '')
     .option('--no-logo', 'Disable the logo entirely', false)
     .option('--back <file>', 'Back panel image (PNG/JPG). Defaults to assets/cardback.png', '')
+    .option('--no-duplex', 'Generate a 1-page single-sided template (cut/fold marks on front)')
     .option('--fonts-dir <dir>', 'Directory containing Marvel Champions fonts (TTF/OTF)', path.join('assets', 'fonts'))
     .option('--font-config <file>', 'JSON mapping font keys to file paths (optional)', '')
     .option('--orientation <auto|portrait|landscape>', 'A4 orientation selection', 'auto')
@@ -74,6 +75,7 @@ async function main() {
     logoPath: opts.logo,
     noLogo: Boolean(opts.noLogo),
     backPath: opts.back,
+    duplex: Boolean(opts.duplex),
     fontsDir: opts.fontsDir,
     fontOverrides,
     orientation,

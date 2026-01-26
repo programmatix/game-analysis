@@ -40,7 +40,7 @@ Useful flags:
 
 ### Tuckbox generator
 
-Generate a single-sheet A4 tuckbox net sized for sleeved Marvel Champions cards (defaults to `91×66mm` sleeves). The deck thickness is configurable:
+Generate a tuckbox net sized for sleeved Marvel Champions cards (defaults to `91×66mm` sleeves). The default output is a 2-page PDF intended for duplex printing: outside art on page 1, and all cut/fold marks + ZA/L# labels on page 2.
 
 ```bash
 npx marvel-tuckbox --hero "Cyclops" --text "Leadership\\nAggression" --thickness-mm 32 --output cyclops-tuckbox.pdf
@@ -53,6 +53,7 @@ Useful flags:
 - `--top-art-offset-x-mm/--top-art-offset-y-mm` adjusts top art cropping.
 - `--logo` sets the Marvel Champions logo image (default: `assets/logo.png`); use `--no-logo` to disable.
 - `--back` sets the back-panel image (default: `assets/cardback.png`).
+- Use `--no-duplex` to generate a 1-page single-sided template.
 - `--fonts-dir` and `--font-config` load the official Marvel Champions fonts when you have them locally (otherwise it falls back to Helvetica).
 - `--orientation auto|portrait|landscape` selects A4 orientation; `auto` picks the first that fits.
 
