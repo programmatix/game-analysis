@@ -9,7 +9,7 @@ async function main() {
   const program = new Command();
   program
     .name('marvel-tuckbox')
-    .description('Generate a printable A4 tuckbox template for Marvel Champions decks (defaults to duplex: outside + marks)')
+    .description('Generate a printable tuckbox template for Marvel Champions decks (defaults to duplex: outside + marks)')
     .requiredOption('--hero <name>', 'Hero name (shown on front/top)')
     .option('--text <text>', 'Misc text (supports literal \\n for line breaks)', '')
     .option('--inner-width-mm <number>', 'Internal box width in millimetres', '68')
@@ -29,9 +29,10 @@ async function main() {
     .option('--no-logo', 'Disable the logo entirely', false)
     .option('--back <file>', 'Back panel image (PNG/JPG). Defaults to assets/cardback.png', '')
     .option('--no-duplex', 'Generate a 1-page single-sided template (cut/fold marks on front)')
-    .option('--fonts-dir <dir>', 'Directory containing Marvel Champions fonts (TTF/OTF)', path.join('assets', 'fonts'))
+    .option('--fonts-dir <dir>', 'Directory containing Marvel Champions fonts (TTF/OTF)', path.join(__dirname, '..', 'assets', 'fonts'))
     .option('--font-config <file>', 'JSON mapping font keys to file paths (optional)', '')
-    .option('--orientation <auto|portrait|landscape>', 'A4 orientation selection', 'auto')
+    .option('--page-size <a4|letter>', 'Page size for printing', 'a4')
+    .option('--orientation <auto|portrait|landscape>', 'Orientation selection', 'auto')
     .option('-o, --output <file>', 'Output PDF path', '')
     .parse(process.argv);
 
@@ -59,6 +60,11 @@ async function main() {
     errors.push('--orientation must be one of: auto, portrait, landscape');
   }
 
+  const pageSize = String(opts.pageSize || 'a4').trim().toLowerCase();
+  if (!['a4', 'letter'].includes(pageSize)) {
+    errors.push('--page-size must be one of: a4, letter');
+  }
+
   const accent = resolveAccent(opts.aspect, opts.accent, errors);
 
   if (errors.length) {
@@ -79,6 +85,7 @@ async function main() {
     duplex: Boolean(opts.duplex),
     fontsDir: opts.fontsDir,
     fontOverrides,
+    pageSize,
     orientation,
   });
 

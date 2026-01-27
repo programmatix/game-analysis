@@ -22,6 +22,7 @@ test('buildTuckBoxPdf: generates a valid 2-page (duplex) PDF by default', async 
 
   assert.ok(Buffer.isBuffer(Buffer.from(pdfBytes)));
   assert.match(Buffer.from(pdfBytes).subarray(0, 5).toString('utf8'), /^%PDF-/);
+  assert.doesNotMatch(Buffer.from(pdfBytes).toString('latin1'), /ObjStm/);
 
   const doc = await PDFDocument.load(pdfBytes);
   assert.equal(doc.getPageCount(), 2);

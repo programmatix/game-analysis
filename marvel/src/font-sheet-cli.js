@@ -9,7 +9,7 @@ async function main() {
   program
     .name('marvel-font-sheet')
     .description('Generate a PDF font sample sheet for Marvel Champions custom fonts')
-    .option('--fonts-dir <dir>', 'Directory containing Marvel Champions fonts (TTF/OTF)', path.join('assets', 'fonts'))
+    .option('--fonts-dir <dir>', 'Directory containing Marvel Champions fonts (TTF/OTF)', path.join(__dirname, '..', 'assets', 'fonts'))
     .option('--font-config <file>', 'JSON mapping font keys to file paths (optional)', '')
     .option('-o, --output <file>', 'Output PDF path', 'marvel-fonts.pdf')
     .parse(process.argv);

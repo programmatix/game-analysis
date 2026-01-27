@@ -22,7 +22,7 @@ async function main() {
     .option('--top-art-offset-y-mm <number>', 'Top art vertical offset in millimetres', '0')
     .option('--logo <file>', 'Marvel Champions logo image (PNG/JPG). Defaults to assets/logo.png', '')
     .option('--no-logo', 'Disable the logo entirely', false)
-    .option('--fonts-dir <dir>', 'Directory containing Marvel Champions fonts (TTF/OTF)', path.join('assets', 'fonts'))
+    .option('--fonts-dir <dir>', 'Directory containing Marvel Champions fonts (TTF/OTF)', path.join(__dirname, '..', 'assets', 'fonts'))
     .option('--font-config <file>', 'JSON mapping font keys to file paths (optional)', '')
     .option('--page-size <a4|letter>', 'Page size for the sample sheet', 'a4')
     .option('--orientation <auto|portrait|landscape>', 'Orientation selection', 'auto')
@@ -201,4 +201,3 @@ main().catch(err => {
   console.error(message);
   process.exitCode = 1;
 });
-

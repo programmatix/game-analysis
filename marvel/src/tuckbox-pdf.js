@@ -127,7 +127,7 @@ async function buildTuckBoxPdf(options) {
     drawLegend(pageFront, { guideFont }, layout, palette, { duplex: false });
   }
 
-  const pdfBytes = await pdfDoc.save();
+  const pdfBytes = await pdfDoc.save({ useObjectStreams: false });
   return { pdfBytes, layout, fontWarnings };
 }
 
@@ -216,7 +216,7 @@ async function buildTuckBoxTopSampleSheetPdf(options) {
     });
   }
 
-  const pdfBytes = await pdfDoc.save();
+  const pdfBytes = await pdfDoc.save({ useObjectStreams: false });
   return {
     pdfBytes,
     sheet: {

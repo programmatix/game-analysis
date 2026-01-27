@@ -55,6 +55,7 @@ Useful flags:
 - `--back` sets the back-panel image (default: `assets/cardback.png`).
 - `--aspect justice|leadership|aggression|protection|basic|pool` sets a preset accent color (overrides `--accent`).
 - Use `--no-duplex` to generate a 1-page single-sided template.
+- `--page-size a4|letter` selects the paper size (use `letter` for many US printers).
 - `--fonts-dir` and `--font-config` load the official Marvel Champions fonts when you have them locally (otherwise it falls back to Helvetica).
 - `--orientation auto|portrait|landscape` selects A4 orientation; `auto` picks the first that fits.
 

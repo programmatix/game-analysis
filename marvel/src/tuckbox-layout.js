@@ -1,5 +1,8 @@
 const { A4_WIDTH_MM, A4_HEIGHT_MM } = require('../../shared/pdf-layout');
 
+const LETTER_WIDTH_MM = 215.9;
+const LETTER_HEIGHT_MM = 279.4;
+
 function computeTuckBoxLayout(options) {
   const innerWidthMm = requirePositiveNumber('--inner-width-mm', options.innerWidthMm ?? options.innerWidth);
   const innerHeightMm = requirePositiveNumber('--inner-height-mm', options.innerHeightMm ?? options.innerHeight);
@@ -21,35 +24,42 @@ function computeTuckBoxLayout(options) {
   const netWidthMm = glueFlapMm + W + D + W + D;
   const netHeightMm = bottomMax + H + topMax;
 
+  const pageSize = normalizePageSize(options.pageSize ?? options.paperSize ?? 'a4');
+  const basePage =
+    pageSize === 'letter'
+      ? { pageWidthMm: LETTER_WIDTH_MM, pageHeightMm: LETTER_HEIGHT_MM }
+      : { pageWidthMm: A4_WIDTH_MM, pageHeightMm: A4_HEIGHT_MM };
+
   const requestedOrientation = normalizeOrientation(options.orientation ?? 'auto');
-  const fit = pickA4Orientation({
+  const fit = pickPageOrientation({
     netWidthMm,
     netHeightMm,
     marginMm,
     requestedOrientation,
+    basePage,
   });
 
   if (!fit.fits) {
     const portraitAvailable = describeFit({
-      pageWidthMm: A4_WIDTH_MM,
-      pageHeightMm: A4_HEIGHT_MM,
+      pageWidthMm: basePage.pageWidthMm,
+      pageHeightMm: basePage.pageHeightMm,
       netWidthMm,
       netHeightMm,
       marginMm,
     });
     const landscapeAvailable = describeFit({
-      pageWidthMm: A4_HEIGHT_MM,
-      pageHeightMm: A4_WIDTH_MM,
+      pageWidthMm: basePage.pageHeightMm,
+      pageHeightMm: basePage.pageWidthMm,
       netWidthMm,
       netHeightMm,
       marginMm,
     });
 
     const lines = [
-      `Tuckbox net does not fit on a single A4 sheet with a ${marginMm}mm margin.`,
+      `Tuckbox net does not fit on a single ${pageSize.toUpperCase()} sheet with a ${marginMm}mm margin.`,
       `- Required net size: ${formatMm(netWidthMm)}mm × ${formatMm(netHeightMm)}mm`,
-      `- A4 portrait usable area: ${portraitAvailable.usable}`,
-      `- A4 landscape usable area: ${landscapeAvailable.usable}`,
+      `- ${pageSize.toUpperCase()} portrait usable area: ${portraitAvailable.usable}`,
+      `- ${pageSize.toUpperCase()} landscape usable area: ${landscapeAvailable.usable}`,
       `Try reducing --inner-width-mm, --inner-height-mm, --inner-depth-mm, --tuck-extra-mm, or --glue-flap-mm.`,
     ];
     throw new Error(lines.join('\n'));
@@ -108,6 +118,7 @@ function computeTuckBoxLayout(options) {
   applySideTabCornerChamfers(cutSegments, { x: topFace.x + topFace.width, y: topFace.y, width: topSideTabMm, height: D }, 2, 'right');
 
   return {
+    pageSize,
     orientation: fit.orientation,
     pageWidthMm,
     pageHeightMm,
@@ -387,7 +398,12 @@ function normalizeOrientation(value) {
   return 'auto';
 }
 
-function pickA4Orientation({ netWidthMm, netHeightMm, marginMm, requestedOrientation }) {
+function normalizePageSize(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  return raw === 'letter' ? 'letter' : 'a4';
+}
+
+function pickPageOrientation({ netWidthMm, netHeightMm, marginMm, requestedOrientation, basePage }) {
   const candidates = [];
 
   const tryOrientation = (orientation, pageWidthMm, pageHeightMm) => {
@@ -398,12 +414,12 @@ function pickA4Orientation({ netWidthMm, netHeightMm, marginMm, requestedOrienta
   };
 
   if (requestedOrientation === 'portrait') {
-    tryOrientation('portrait', A4_WIDTH_MM, A4_HEIGHT_MM);
+    tryOrientation('portrait', basePage.pageWidthMm, basePage.pageHeightMm);
   } else if (requestedOrientation === 'landscape') {
-    tryOrientation('landscape', A4_HEIGHT_MM, A4_WIDTH_MM);
+    tryOrientation('landscape', basePage.pageHeightMm, basePage.pageWidthMm);
   } else {
-    tryOrientation('portrait', A4_WIDTH_MM, A4_HEIGHT_MM);
-    tryOrientation('landscape', A4_HEIGHT_MM, A4_WIDTH_MM);
+    tryOrientation('portrait', basePage.pageWidthMm, basePage.pageHeightMm);
+    tryOrientation('landscape', basePage.pageHeightMm, basePage.pageWidthMm);
   }
 
   const fitting = candidates.filter(item => item.fits);
