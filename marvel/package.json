@@ -11,6 +11,7 @@
     "marvel-pack": "src/pack-cli.js",
     "marvel-download": "src/download-cli.js",
     "marvel-tuckbox": "src/tuckbox-cli.js",
+    "marvel-tuckbox-samples": "src/tuckbox-samples-cli.js",
     "marvel-font-sheet": "src/font-sheet-cli.js",
     "marvel-fonts-download": "src/fonts-download-cli.js"
   },

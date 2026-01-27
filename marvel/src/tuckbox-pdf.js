@@ -131,6 +131,106 @@ async function buildTuckBoxPdf(options) {
   return { pdfBytes, layout, fontWarnings };
 }
 
+const TOP_SAMPLE_VARIANTS = [
+  { id: 'baseline', label: 'Baseline' },
+  { id: 'double-frame', label: 'Double frame' },
+  { id: 'brackets', label: 'Brackets + bar' },
+  { id: 'stripes', label: 'Edge stripes' },
+  { id: 'scanlines', label: 'Scanlines' },
+  { id: 'burst', label: 'Burst' },
+  { id: 'dots', label: 'Halftone corners' },
+  { id: 'sash', label: 'Angled sash' },
+  { id: 'tech', label: 'Tech lines' },
+  { id: 'rivets', label: 'Rivets' },
+  { id: 'dashed', label: 'Dashed frame' },
+  { id: 'grid', label: 'Grid' },
+  { id: 'split', label: 'Split + accent' },
+  { id: 'tape', label: 'Tape' },
+  { id: 'chevrons', label: 'Chevrons' },
+  { id: 'neon', label: 'Neon' },
+];
+
+async function buildTuckBoxTopSampleSheetPdf(options) {
+  const baseLayout = computeTuckBoxLayout(options);
+
+  const pdfDoc = await PDFDocument.create();
+  const { fonts, warnings: fontWarnings } = await loadMarvelChampionsFonts(pdfDoc, {
+    fontsDir: options.fontsDir,
+    overrides: options.fontOverrides,
+    neededKeys: ['title', 'body', 'mouseprint'],
+  });
+  const guideFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+  const palette = {
+    background: rgb(0.05, 0.06, 0.08),
+    panel: rgb(0.09, 0.1, 0.13),
+    marvelBlue: rgb(28 / 255, 74 / 255, 112 / 255),
+    fold: rgb(0.55, 0.55, 0.55),
+    cut: rgb(0, 0, 0),
+    accent: parseHexColor(options.accent || '#f7d117', rgb(0.97, 0.82, 0.09)),
+    white: rgb(1, 1, 1),
+  };
+
+  const sheet = resolveSampleSheetLayout(options);
+  const page = pdfDoc.addPage([mmToPt(sheet.pageWidthMm), mmToPt(sheet.pageHeightMm)]);
+  page.drawRectangle({ x: 0, y: 0, width: page.getWidth(), height: page.getHeight(), color: rgb(1, 1, 1) });
+
+  const imageCache = new Map();
+  const artPath = resolveOptionalPath(options.artPath || options.art, defaultCyclopsArtPath());
+  const embeddedArt = artPath ? await embedImage(pdfDoc, artPath, imageCache) : null;
+
+  let embeddedLogo = null;
+  if (!options.noLogo) {
+    const logoPath = resolveOptionalPath(options.logoPath || options.logo, defaultLogoPath());
+    if (logoPath) embeddedLogo = await embedImage(pdfDoc, logoPath, imageCache);
+  }
+
+  const heroName = String(options.heroName || options.hero || '').trim();
+  const miscText = normalizeMiscText(options.miscText ?? options.text ?? '');
+
+  const header = `Tuckbox top samples — ${heroName || 'Hero'}`;
+  drawTextMm(page, guideFont, header, { x: sheet.marginMm, y: sheet.pageHeightMm - sheet.marginMm - 4.5 }, { sizeMm: 3.6, color: palette.cut });
+  const sub = `Grid: ${sheet.rows}×${sheet.columns}  •  Variants: ${Math.min(sheet.count, sheet.rows * sheet.columns)}`;
+  drawTextMm(page, guideFont, sub, { x: sheet.marginMm, y: sheet.pageHeightMm - sheet.marginMm - 8.5 }, { sizeMm: 2.6, color: rgb(0.25, 0.25, 0.25) });
+
+  const baseTopFaceMm = { width: baseLayout.topFace.width, height: baseLayout.topFace.height };
+
+  for (let index = 0; index < sheet.count; index++) {
+    const cell = sampleCellRectMm(sheet, index);
+    if (!cell) break;
+
+    const variant = TOP_SAMPLE_VARIANTS[index % TOP_SAMPLE_VARIANTS.length];
+    const label = `#${String(index + 1).padStart(2, '0')} — ${variant.label}`;
+    drawTextMm(page, guideFont, label, { x: cell.x, y: cell.y + 1.2 }, { sizeMm: 2.5, color: rgb(0.15, 0.15, 0.15) });
+
+    const designArea = insetRectMm({ x: cell.x, y: cell.y + sheet.cellLabelHeightMm, width: cell.width, height: cell.height - sheet.cellLabelHeightMm }, 1);
+    const designRect = fitRectAspectMm(designArea, baseTopFaceMm.width / baseTopFaceMm.height);
+
+    drawTopSampleVariant(page, { fonts, guideFont }, designRect, { heroName, miscText }, palette, {
+      embeddedArt,
+      embeddedLogo,
+      baseTopFaceMm,
+      topArtOffsetXMm: Number(options.topArtOffsetXMm) || 0,
+      topArtOffsetYMm: Number(options.topArtOffsetYMm) || 0,
+      variantIndex: index,
+    });
+  }
+
+  const pdfBytes = await pdfDoc.save();
+  return {
+    pdfBytes,
+    sheet: {
+      pageWidthMm: sheet.pageWidthMm,
+      pageHeightMm: sheet.pageHeightMm,
+      orientation: sheet.orientation,
+      columns: sheet.columns,
+      rows: sheet.rows,
+      count: sheet.count,
+    },
+    fontWarnings,
+  };
+}
+
 function drawFrontGlueMarks(page, { guideFont }, layout, palette, { duplex }) {
   if (!duplex) return;
   const zones = buildZoneLabels(layout);
@@ -209,8 +309,9 @@ function drawBackArt(page, embeddedImage, rectMm, palette, { duplex } = {}) {
 }
 
 function drawFrontLogoImage(page, embeddedImage, frontMm) {
-  const maxWidthMm = Math.min(26, frontMm.width * 0.38);
-  const maxHeightMm = 12;
+  const scale = 1.5;
+  const maxWidthMm = Math.min(26 * scale, frontMm.width * 0.38 * scale);
+  const maxHeightMm = 12 * scale;
   const x = frontMm.x + 3;
   const y = frontMm.y + frontMm.height - maxHeightMm - 3;
   drawImageContainMm(page, embeddedImage, { x, y, width: maxWidthMm, height: maxHeightMm }, { opacity: 0.98 });
@@ -258,26 +359,18 @@ function drawFrontText(page, fonts, frontMm, { heroName, miscText }, palette) {
 }
 
 function drawTopText(page, fonts, topFaceMm, { heroName, miscText }, palette) {
-  const inset = insetRectMm(topFaceMm, 2);
-  const yShiftDownMm = 1.2;
-
-  const title = heroName || 'Hero';
-  const titleSizeMm = fitTextSizeMm(fonts.title, title, inset.width, 8, 3.5);
-  const titleHeightMm = titleSizeMm * 1.12;
-  const titleBox = { x: inset.x, y: inset.y + inset.height - titleHeightMm - yShiftDownMm, width: inset.width, height: titleHeightMm };
-  drawCenteredTextOutlineMm(page, fonts.title, title, titleBox, {
-    sizePt: mmToPt(titleSizeMm),
+  const layout = computeTopTextLayout(fonts, topFaceMm, { heroName, miscText });
+  drawCenteredTextOutlineMm(page, fonts.title, layout.title, layout.titleBox, {
+    sizePt: mmToPt(layout.titleSizeMm),
     color: palette.white,
     outlineColor: rgb(0, 0, 0),
     outlineOffsetMm: 0.35,
     yOffsetMm: -0.2,
   });
 
-  if (!miscText.lines.length) return;
-  const miscSizeMm = Math.min(3.6, titleSizeMm * 0.55);
-  const miscBox = { x: inset.x, y: inset.y - yShiftDownMm, width: inset.width, height: inset.height - titleHeightMm + 0.5 };
-  drawWrappedTextOutlineMm(page, fonts.body, miscText.lines.join('\n'), miscBox, {
-    sizePt: mmToPt(miscSizeMm),
+  if (!layout.miscText) return;
+  drawWrappedTextOutlineMm(page, fonts.body, layout.miscText, layout.miscBox, {
+    sizePt: mmToPt(layout.miscSizeMm),
     color: rgb(0.92, 0.92, 0.92),
     outlineColor: rgb(0, 0, 0),
     outlineOffsetMm: 0.3,
@@ -285,6 +378,33 @@ function drawTopText(page, fonts, topFaceMm, { heroName, miscText }, palette) {
     maxLines: 2,
     valign: 'top',
   });
+}
+
+function computeTopTextLayout(fonts, topFaceMm, { heroName, miscText }) {
+  const inset = insetRectMm(topFaceMm, 2);
+  const yShiftDownMm = 1.2;
+
+  const title = heroName || 'Hero';
+  const titleSizeMm = fitTextSizeMm(fonts.title, title, inset.width, 8, 3.5);
+  const titleHeightMm = titleSizeMm * 1.12;
+  const titleBox = { x: inset.x, y: inset.y + inset.height - titleHeightMm - yShiftDownMm, width: inset.width, height: titleHeightMm };
+
+  const miscTextNormalized = miscText?.lines?.length ? miscText.lines.join('\n') : '';
+  const miscSizeMm = miscTextNormalized ? Math.min(3.6, titleSizeMm * 0.55) : 0;
+  const miscBox = miscTextNormalized
+    ? { x: inset.x, y: inset.y - yShiftDownMm, width: inset.width, height: inset.height - titleHeightMm + 0.5 }
+    : null;
+
+  return {
+    inset,
+    yShiftDownMm,
+    title,
+    titleSizeMm,
+    titleBox,
+    miscText: miscTextNormalized || null,
+    miscSizeMm,
+    miscBox,
+  };
 }
 
 function drawSpineText(page, fonts, spineMm, { heroName }, palette, { flip }) {
@@ -345,51 +465,212 @@ function drawGuides(page, layout, palette) {
 }
 
 function drawLineLabels(page, { guideFont }, layout, palette) {
-  const segments = labelSegments(layout);
-  for (const item of segments) {
+  const candidates = collectSegmentsForLabels(layout);
+  const labeled = pickNonOverlappingLabelSegments(page, guideFont, candidates);
+  for (const item of labeled) {
     drawLineLabel(page, guideFont, item, palette);
   }
 }
 
-function labelSegments(layout) {
+function collectSegmentsForLabels(layout) {
   const all = [];
-  for (const seg of layout.segments.cut) all.push({ type: 'cut', seg });
-  for (const seg of layout.segments.fold) all.push({ type: 'fold', seg });
+  const cut = mergeAxisAlignedSegments(layout.segments.cut);
+  const fold = mergeAxisAlignedSegments(layout.segments.fold);
+  for (const seg of cut) all.push({ type: 'cut', seg });
+  for (const seg of fold) all.push({ type: 'fold', seg });
+  return all;
+}
 
-  all.sort((a, b) => {
-    const aKind = a.seg.y1 === a.seg.y2 ? 'h' : a.seg.x1 === a.seg.x2 ? 'v' : 'd';
-    const bKind = b.seg.y1 === b.seg.y2 ? 'h' : b.seg.x1 === b.seg.x2 ? 'v' : 'd';
-    const order = { h: 0, v: 1, d: 2 };
-    if (aKind !== bKind) return order[aKind] - order[bKind];
+function pickNonOverlappingLabelSegments(page, guideFont, segments) {
+  const pageWidthMm = ptToMm(page.getWidth());
+  const pageHeightMm = ptToMm(page.getHeight());
+  const minLenMm = { cut: 8, fold: 10 };
 
-    if (aKind === 'h') {
-      if (a.seg.y1 !== b.seg.y1) return a.seg.y1 - b.seg.y1;
-      if (a.seg.x1 !== b.seg.x1) return a.seg.x1 - b.seg.x1;
-      if (a.seg.x2 !== b.seg.x2) return a.seg.x2 - b.seg.x2;
-    } else if (aKind === 'v') {
-      if (a.seg.x1 !== b.seg.x1) return a.seg.x1 - b.seg.x1;
-      if (a.seg.y1 !== b.seg.y1) return a.seg.y1 - b.seg.y1;
-      if (a.seg.y2 !== b.seg.y2) return a.seg.y2 - b.seg.y2;
-    } else {
-      const aMinY = Math.min(a.seg.y1, a.seg.y2);
-      const bMinY = Math.min(b.seg.y1, b.seg.y2);
-      if (aMinY !== bMinY) return aMinY - bMinY;
-      const aMinX = Math.min(a.seg.x1, a.seg.x2);
-      const bMinX = Math.min(b.seg.x1, b.seg.x2);
-      if (aMinX !== bMinX) return aMinX - bMinX;
-      const aMaxY = Math.max(a.seg.y1, a.seg.y2);
-      const bMaxY = Math.max(b.seg.y1, b.seg.y2);
-      if (aMaxY !== bMaxY) return aMaxY - bMaxY;
-      const aMaxX = Math.max(a.seg.x1, a.seg.x2);
-      const bMaxX = Math.max(b.seg.x1, b.seg.x2);
-      if (aMaxX !== bMaxX) return aMaxX - bMaxX;
-    }
+  const candidates = (Array.isArray(segments) ? segments : [])
+    .map(item => ({
+      ...item,
+      kind: item.seg.y1 === item.seg.y2 ? 'h' : item.seg.x1 === item.seg.x2 ? 'v' : 'd',
+      lengthMm: segmentLengthMm(item.seg),
+    }))
+    .filter(item => item.lengthMm >= (minLenMm[item.type] ?? 8));
 
-    if (a.type !== b.type) return a.type === 'cut' ? -1 : 1;
-    return 0;
+  // Prefer diagonal labels (tapers), then longer segments.
+  const priorityOrder = { d: 0, v: 1, h: 2 };
+  candidates.sort((a, b) => {
+    if (priorityOrder[a.kind] !== priorityOrder[b.kind]) return priorityOrder[a.kind] - priorityOrder[b.kind];
+    if (b.lengthMm !== a.lengthMm) return b.lengthMm - a.lengthMm;
+    return compareForStableLineOrder(a, b);
   });
 
-  return all.map((item, index) => ({ ...item, label: `L${index + 1}` }));
+  const placed = [];
+  const reserved = [];
+  const templateLabel = 'L999';
+
+  for (const item of candidates) {
+    const boxMm = computeLineLabelBoxMm(pageWidthMm, pageHeightMm, guideFont, templateLabel, item.type, item.seg);
+    if (boxMm.width <= 0 || boxMm.height <= 0) continue;
+    if (reserved.some(r => rectsOverlapMm(r, boxMm, 0.8))) continue;
+    reserved.push(boxMm);
+    placed.push(item);
+  }
+
+  // Number remaining segments in a stable, spatial order.
+  placed.sort(compareForStableLineOrder);
+  return placed.map((item, idx) => ({ ...item, label: `L${idx + 1}` }));
+}
+
+function segmentLengthMm(seg) {
+  const dx = Number(seg.x2) - Number(seg.x1);
+  const dy = Number(seg.y2) - Number(seg.y1);
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+function compareForStableLineOrder(a, b) {
+  const aKind = a.kind ?? (a.seg.y1 === a.seg.y2 ? 'h' : a.seg.x1 === a.seg.x2 ? 'v' : 'd');
+  const bKind = b.kind ?? (b.seg.y1 === b.seg.y2 ? 'h' : b.seg.x1 === b.seg.x2 ? 'v' : 'd');
+  const order = { h: 0, v: 1, d: 2 };
+  if (aKind !== bKind) return order[aKind] - order[bKind];
+
+  if (aKind === 'h') {
+    if (a.seg.y1 !== b.seg.y1) return a.seg.y1 - b.seg.y1;
+    if (a.seg.x1 !== b.seg.x1) return a.seg.x1 - b.seg.x1;
+    if (a.seg.x2 !== b.seg.x2) return a.seg.x2 - b.seg.x2;
+  } else if (aKind === 'v') {
+    if (a.seg.x1 !== b.seg.x1) return a.seg.x1 - b.seg.x1;
+    if (a.seg.y1 !== b.seg.y1) return a.seg.y1 - b.seg.y1;
+    if (a.seg.y2 !== b.seg.y2) return a.seg.y2 - b.seg.y2;
+  } else {
+    const aMinY = Math.min(a.seg.y1, a.seg.y2);
+    const bMinY = Math.min(b.seg.y1, b.seg.y2);
+    if (aMinY !== bMinY) return aMinY - bMinY;
+    const aMinX = Math.min(a.seg.x1, a.seg.x2);
+    const bMinX = Math.min(b.seg.x1, b.seg.x2);
+    if (aMinX !== bMinX) return aMinX - bMinX;
+    const aMaxY = Math.max(a.seg.y1, a.seg.y2);
+    const bMaxY = Math.max(b.seg.y1, b.seg.y2);
+    if (aMaxY !== bMaxY) return aMaxY - bMaxY;
+    const aMaxX = Math.max(a.seg.x1, a.seg.x2);
+    const bMaxX = Math.max(b.seg.x1, b.seg.x2);
+    if (aMaxX !== bMaxX) return aMaxX - bMaxX;
+  }
+
+  if (a.type !== b.type) return a.type === 'cut' ? -1 : 1;
+  return 0;
+}
+
+function computeLineLabelBoxMm(pageWidthMm, pageHeightMm, guideFont, label, type, seg) {
+  const isH = seg.y1 === seg.y2;
+  const isV = seg.x1 === seg.x2;
+  const midX = (seg.x1 + seg.x2) / 2;
+  const midY = (seg.y1 + seg.y2) / 2;
+  const sub = type === 'cut' ? 'CUT' : 'FOLD';
+
+  const sizeMm = 2.8;
+  const subSizeMm = 2.2;
+  const padMm = 0.8;
+
+  const sizePt = mmToPt(sizeMm);
+  const subSizePt = mmToPt(subSizeMm);
+  const textWPt = guideFont.widthOfTextAtSize(label, sizePt);
+  const subWPt = guideFont.widthOfTextAtSize(sub, subSizePt);
+  const boxWPt = Math.max(textWPt, subWPt) + mmToPt(padMm * 2);
+  const boxHPt = sizePt + subSizePt + mmToPt(padMm * 2) + mmToPt(0.5);
+
+  const offsetMm = 1.2;
+  const anchorMm = isH ? { x: midX, y: midY + offsetMm } : isV ? { x: midX + offsetMm, y: midY } : { x: midX + offsetMm, y: midY + offsetMm };
+  let boxMm = {
+    x: anchorMm.x - ptToMm(boxWPt) / 2,
+    y: anchorMm.y - ptToMm(boxHPt) / 2,
+    width: ptToMm(boxWPt),
+    height: ptToMm(boxHPt),
+  };
+
+  boxMm = {
+    ...boxMm,
+    x: Math.max(0, Math.min(boxMm.x, pageWidthMm - boxMm.width)),
+    y: Math.max(0, Math.min(boxMm.y, pageHeightMm - boxMm.height)),
+  };
+
+  return boxMm;
+}
+
+function rectsOverlapMm(a, b, paddingMm = 0) {
+  const pad = Number(paddingMm) || 0;
+  return !(
+    a.x + a.width + pad <= b.x ||
+    b.x + b.width + pad <= a.x ||
+    a.y + a.height + pad <= b.y ||
+    b.y + b.height + pad <= a.y
+  );
+}
+
+function mergeAxisAlignedSegments(segments, epsilon = 1e-6) {
+  const horizontals = new Map(); // y -> [{x1,x2}]
+  const verticals = new Map(); // x -> [{y1,y2}]
+  const others = [];
+
+  for (const seg of Array.isArray(segments) ? segments : []) {
+    const isH = seg.y1 === seg.y2;
+    const isV = seg.x1 === seg.x2;
+    if (isH) {
+      const y = seg.y1;
+      const x1 = Math.min(seg.x1, seg.x2);
+      const x2 = Math.max(seg.x1, seg.x2);
+      const key = y.toFixed(6);
+      if (!horizontals.has(key)) horizontals.set(key, { y, spans: [] });
+      horizontals.get(key).spans.push({ x1, x2 });
+    } else if (isV) {
+      const x = seg.x1;
+      const y1 = Math.min(seg.y1, seg.y2);
+      const y2 = Math.max(seg.y1, seg.y2);
+      const key = x.toFixed(6);
+      if (!verticals.has(key)) verticals.set(key, { x, spans: [] });
+      verticals.get(key).spans.push({ y1, y2 });
+    } else {
+      others.push(seg);
+    }
+  }
+
+  const merged = [];
+
+  for (const { y, spans } of horizontals.values()) {
+    spans.sort((a, b) => a.x1 - b.x1 || a.x2 - b.x2);
+    let current = null;
+    for (const span of spans) {
+      if (!current) {
+        current = { ...span };
+        continue;
+      }
+      if (span.x1 <= current.x2 + epsilon) {
+        current.x2 = Math.max(current.x2, span.x2);
+      } else {
+        merged.push({ x1: current.x1, y1: y, x2: current.x2, y2: y });
+        current = { ...span };
+      }
+    }
+    if (current) merged.push({ x1: current.x1, y1: y, x2: current.x2, y2: y });
+  }
+
+  for (const { x, spans } of verticals.values()) {
+    spans.sort((a, b) => a.y1 - b.y1 || a.y2 - b.y2);
+    let current = null;
+    for (const span of spans) {
+      if (!current) {
+        current = { ...span };
+        continue;
+      }
+      if (span.y1 <= current.y2 + epsilon) {
+        current.y2 = Math.max(current.y2, span.y2);
+      } else {
+        merged.push({ x1: x, y1: current.y1, x2: x, y2: current.y2 });
+        current = { ...span };
+      }
+    }
+    if (current) merged.push({ x1: x, y1: current.y1, x2: x, y2: current.y2 });
+  }
+
+  merged.push(...others);
+  return merged;
 }
 
 function drawLineLabel(page, guideFont, { label, type, seg }, palette) {
@@ -606,8 +887,8 @@ function drawImageCoverMm(page, embeddedImage, rectMm, { clipRadiusMm = 0, opaci
   });
 
   page.drawImage(embeddedImage, {
-    x: mmToPt(x),
-    y: mmToPt(y),
+    x: mmToPtCoord(x),
+    y: mmToPtCoord(y),
     width: mmToPt(drawW),
     height: mmToPt(drawH),
     opacity,
@@ -627,8 +908,8 @@ function drawImageContainMm(page, embeddedImage, rectMm, { opacity = 1 } = {}) {
   const y = rectMm.y + (rectMm.height - drawH) / 2;
 
   page.drawImage(embeddedImage, {
-    x: mmToPt(x),
-    y: mmToPt(y),
+    x: mmToPtCoord(x),
+    y: mmToPtCoord(y),
     width: mmToPt(drawW),
     height: mmToPt(drawH),
     opacity,
@@ -657,6 +938,608 @@ function insetRectMm(rectMm, insetMm) {
     width: Math.max(0, rectMm.width - inset * 2),
     height: Math.max(0, rectMm.height - inset * 2),
   };
+}
+
+function expandRectMm(rectMm, expandMm) {
+  const expand = Number(expandMm) || 0;
+  return {
+    x: rectMm.x - expand,
+    y: rectMm.y - expand,
+    width: rectMm.width + expand * 2,
+    height: rectMm.height + expand * 2,
+  };
+}
+
+function fitRectAspectMm(containerMm, aspectWidthOverHeight) {
+  const aspect = Number(aspectWidthOverHeight) || 1;
+  const safe = insetRectMm(containerMm, 0);
+  let width = safe.width;
+  let height = width / aspect;
+  if (height > safe.height) {
+    height = safe.height;
+    width = height * aspect;
+  }
+  return {
+    x: safe.x + (safe.width - width) / 2,
+    y: safe.y + (safe.height - height) / 2,
+    width,
+    height,
+  };
+}
+
+function clampInt(value, { min = 1, max = 999 } = {}) {
+  const n = Math.floor(Number(value));
+  if (!Number.isFinite(n)) return min;
+  return Math.max(min, Math.min(max, n));
+}
+
+function resolveSampleSheetLayout(options) {
+  const pageSize = String(options.pageSize || options.sheetPageSize || 'a4')
+    .trim()
+    .toLowerCase();
+  const base = pageSize === 'letter' ? { widthMm: 215.9, heightMm: 279.4 } : { widthMm: 210, heightMm: 297 };
+
+  const columns = clampInt(options.columns ?? options.cols ?? 4, { min: 1, max: 10 });
+  const rows = clampInt(options.rows ?? 4, { min: 1, max: 10 });
+  const count = clampInt(options.count ?? columns * rows, { min: 1, max: columns * rows });
+
+  const marginMm = Number(options.sheetMarginMm ?? options.marginMm ?? 8);
+  const gutterMm = Number(options.gutterMm ?? options.sheetGutterMm ?? 3);
+  const headerHeightMm = Number(options.sheetHeaderHeightMm ?? 12);
+  const cellLabelHeightMm = Number(options.cellLabelHeightMm ?? 6);
+
+  const requested = String(options.sheetOrientation || options.orientation || 'auto')
+    .trim()
+    .toLowerCase();
+
+  function layoutFor(orientation) {
+    const pageWidthMm = orientation === 'landscape' ? base.heightMm : base.widthMm;
+    const pageHeightMm = orientation === 'landscape' ? base.widthMm : base.heightMm;
+    const grid = {
+      x: marginMm,
+      y: marginMm,
+      width: Math.max(1, pageWidthMm - marginMm * 2),
+      height: Math.max(1, pageHeightMm - marginMm * 2 - headerHeightMm),
+    };
+    const cellWidthMm = (grid.width - gutterMm * (columns - 1)) / columns;
+    const cellHeightMm = (grid.height - gutterMm * (rows - 1)) / rows;
+    return { orientation, pageWidthMm, pageHeightMm, grid, cellWidthMm, cellHeightMm };
+  }
+
+  const portrait = layoutFor('portrait');
+  const landscape = layoutFor('landscape');
+  const chosen =
+    requested === 'portrait'
+      ? portrait
+      : requested === 'landscape'
+        ? landscape
+        : landscape.cellWidthMm >= portrait.cellWidthMm
+          ? landscape
+          : portrait;
+
+  return {
+    ...chosen,
+    pageSize,
+    columns,
+    rows,
+    count,
+    marginMm,
+    gutterMm,
+    headerHeightMm,
+    cellLabelHeightMm,
+  };
+}
+
+function sampleCellRectMm(sheet, index) {
+  const col = index % sheet.columns;
+  const row = Math.floor(index / sheet.columns);
+  if (row >= sheet.rows) return null;
+
+  const x = sheet.grid.x + col * (sheet.cellWidthMm + sheet.gutterMm);
+  const y = sheet.grid.y + (sheet.rows - 1 - row) * (sheet.cellHeightMm + sheet.gutterMm);
+  return { x, y, width: sheet.cellWidthMm, height: sheet.cellHeightMm };
+}
+
+function withClipRectMm(page, rectMm, fn) {
+  applyRoundedRectClip(page, PDF_OPS, {
+    x: mmToPt(rectMm.x),
+    y: mmToPt(rectMm.y),
+    width: mmToPt(rectMm.width),
+    height: mmToPt(rectMm.height),
+    radius: 0,
+  });
+  try {
+    fn();
+  } finally {
+    restoreGraphicsState(page, PDF_OPS);
+  }
+}
+
+function drawTopSampleVariant(page, { fonts, guideFont }, rectMm, { heroName, miscText }, palette, assets) {
+  const variantIndex = Number(assets.variantIndex) || 0;
+  const embeddedArt = assets.embeddedArt;
+  const embeddedLogo = assets.embeddedLogo;
+
+  const baseTopWidthMm = Number(assets.baseTopFaceMm?.width) || rectMm.width;
+  const scale = rectMm.width / baseTopWidthMm;
+  const offsetsMm = {
+    x: (Number(assets.topArtOffsetXMm) || 0) * scale,
+    y: (Number(assets.topArtOffsetYMm) || 0) * scale,
+  };
+
+  if (embeddedArt) {
+    drawImageCoverMm(page, embeddedArt, rectMm, { clipRadiusMm: 0, opacity: 1, offsetsMm });
+  } else {
+    drawRectMm(page, rectMm, { color: palette.panel, opacity: 1 });
+  }
+
+  const idx = variantIndex % TOP_SAMPLE_VARIANTS.length;
+  const textLayout = computeTopTextLayout(fonts, rectMm, { heroName, miscText });
+
+  const dark = rgb(0, 0, 0);
+  const light = rgb(1, 1, 1);
+
+  if (idx !== 0) {
+    // Slight legibility lift for most variants.
+    drawRectMm(page, rectMm, { color: dark, opacity: 0.06 });
+  }
+
+  switch (idx) {
+    case 0: {
+      drawRectMm(page, rectMm, { borderColor: palette.accent, borderWidthPt: 1.2 });
+      drawTextPlateMm(page, textLayout, { style: 'soft', accent: palette.accent });
+      break;
+    }
+    case 1: {
+      drawRectMm(page, rectMm, { borderColor: palette.accent, borderWidthPt: 2.2 });
+      drawRectMm(page, insetRectMm(rectMm, 0.9), { borderColor: light, borderWidthPt: 0.7 });
+      drawCornerBracketsMm(page, rectMm, { color: light, thicknessPt: 1.0, lengthMm: 4.5, insetMm: 1.6, opacity: 0.9 });
+      drawTextPlateMm(page, textLayout, { style: 'hard', accent: palette.accent });
+      break;
+    }
+    case 2: {
+      drawRectMm(page, rectMm, { borderColor: dark, borderWidthPt: 2.4 });
+      drawCornerBracketsMm(page, rectMm, { color: palette.accent, thicknessPt: 1.4, lengthMm: 6, insetMm: 1.5, opacity: 0.95 });
+      drawAccentBarMm(page, expandRectMm(textLayout.titleBox, 0.6), { color: palette.accent, opacity: 0.75 });
+      if (textLayout.miscBox) drawAccentBarMm(page, expandRectMm(textLayout.miscBox, 0.6), { color: dark, opacity: 0.35 });
+      break;
+    }
+    case 3: {
+      drawRectMm(page, rectMm, { borderColor: dark, borderWidthPt: 1.6 });
+      drawEdgeStripesMm(page, rectMm, { color: palette.accent, stripeMm: 1.9, opacity: 0.85 });
+      withClipRectMm(page, insetRectMm(rectMm, 0.6), () => {
+        drawDiagonalStripes(page, rectMm, { white: light }, { densityMm: 4.8, alpha: 0.06 });
+      });
+      drawTextPlateMm(page, textLayout, { style: 'soft', accent: palette.accent });
+      break;
+    }
+    case 4: {
+      drawRectMm(page, rectMm, { borderColor: palette.accent, borderWidthPt: 1.2 });
+      withClipRectMm(page, insetRectMm(rectMm, 0.4), () => {
+        drawScanlinesMm(page, rectMm, { color: light, alpha: 0.08, spacingMm: 0.85, thicknessPt: 0.35 });
+      });
+      drawTextPlateMm(page, textLayout, { style: 'hard', accent: palette.accent });
+      break;
+    }
+    case 5: {
+      drawRectMm(page, rectMm, { borderColor: dark, borderWidthPt: 2.0 });
+      withClipRectMm(page, rectMm, () => {
+        drawRadialBurstMm(page, rectMm, { color: palette.accent, alpha: 0.18, rays: 22, thicknessPt: 0.6 });
+      });
+      drawTextPlateMm(page, textLayout, { style: 'badge', accent: palette.accent });
+      break;
+    }
+    case 6: {
+      drawRectMm(page, rectMm, { borderColor: dark, borderWidthPt: 2.8 });
+      drawRectMm(page, insetRectMm(rectMm, 1.0), { borderColor: light, borderWidthPt: 0.6 });
+      withClipRectMm(page, rectMm, () => {
+        drawCornerHalftoneMm(page, rectMm, { color: light, alpha: 0.12, dotMm: 0.6, pitchMm: 1.6, extentMm: 9 });
+      });
+      drawTextPlateMm(page, textLayout, { style: 'hard', accent: palette.accent });
+      break;
+    }
+    case 7: {
+      drawRectMm(page, rectMm, { borderColor: palette.accent, borderWidthPt: 1.4 });
+      withClipRectMm(page, rectMm, () => {
+        drawAngledSashMm(page, rectMm, { color: palette.accent, alpha: 0.7, angleDeg: -12 });
+        drawAngledSashMm(page, rectMm, { color: dark, alpha: 0.28, angleDeg: -12, offsetMm: { x: 0.6, y: -0.6 } });
+      });
+      drawTextPlateMm(page, textLayout, { style: 'soft', accent: palette.accent });
+      break;
+    }
+    case 8: {
+      drawRectMm(page, rectMm, { borderColor: dark, borderWidthPt: 2.0 });
+      withClipRectMm(page, insetRectMm(rectMm, 0.8), () => {
+        drawTechLinesMm(page, rectMm, { color: light, alpha: 0.12, accent: palette.accent });
+      });
+      if (embeddedLogo) drawCornerLogoMm(page, embeddedLogo, rectMm, { corner: 'top-left', opacity: 0.9 });
+      drawTextPlateMm(page, textLayout, { style: 'hard', accent: palette.accent });
+      break;
+    }
+    case 9: {
+      drawRectMm(page, rectMm, { borderColor: dark, borderWidthPt: 2.4 });
+      drawRivetsMm(page, rectMm, { fill: rgb(0.85, 0.85, 0.85), stroke: rgb(0.1, 0.1, 0.1), radiusMm: 0.9 });
+      drawTextPlateMm(page, textLayout, { style: 'metal', accent: palette.accent });
+      break;
+    }
+    case 10: {
+      drawRectMm(page, rectMm, { borderColor: palette.accent, borderWidthPt: 1.0 });
+      drawDashedFrameMm(page, insetRectMm(rectMm, 1.0), { color: light, thicknessPt: 0.7, dashMm: [1.2, 0.9] });
+      drawTextPlateMm(page, textLayout, { style: 'soft', accent: palette.accent });
+      break;
+    }
+    case 11: {
+      drawRectMm(page, rectMm, { borderColor: dark, borderWidthPt: 1.8 });
+      withClipRectMm(page, insetRectMm(rectMm, 0.5), () => {
+        drawGridMm(page, rectMm, { color: light, alpha: 0.06, spacingMm: 2.6, thicknessPt: 0.4 });
+      });
+      drawTextPlateMm(page, textLayout, { style: 'hard', accent: palette.accent });
+      break;
+    }
+    case 12: {
+      drawRectMm(page, rectMm, { borderColor: dark, borderWidthPt: 2.2 });
+      withClipRectMm(page, rectMm, () => {
+        drawRectMm(page, { x: rectMm.x, y: rectMm.y, width: rectMm.width * 0.4, height: rectMm.height }, { color: palette.accent, opacity: 0.24 });
+        drawRectMm(page, { x: rectMm.x + rectMm.width * 0.4, y: rectMm.y, width: rectMm.width * 0.6, height: rectMm.height }, { color: dark, opacity: 0.1 });
+        drawSolidLineMm(
+          page,
+          { x1: rectMm.x + rectMm.width * 0.4, y1: rectMm.y, x2: rectMm.x + rectMm.width * 0.4, y2: rectMm.y + rectMm.height },
+          { color: light, thicknessPt: 0.7, opacity: 0.5 },
+        );
+      });
+      if (embeddedLogo) drawCornerLogoMm(page, embeddedLogo, rectMm, { corner: 'bottom-right', opacity: 0.85 });
+      drawTextPlateMm(page, textLayout, { style: 'soft', accent: palette.accent });
+      break;
+    }
+    case 13: {
+      drawRectMm(page, rectMm, { borderColor: palette.accent, borderWidthPt: 1.4 });
+      withClipRectMm(page, rectMm, () => {
+        drawTapeMm(page, rectMm, expandRectMm(textLayout.titleBox, 1.4), { angleDeg: -10, opacity: 0.32 });
+        if (textLayout.miscBox) drawTapeMm(page, rectMm, expandRectMm(textLayout.miscBox, 1.4), { angleDeg: 8, opacity: 0.26 });
+      });
+      drawTextPlateMm(page, textLayout, { style: 'none', accent: palette.accent });
+      break;
+    }
+    case 14: {
+      drawRectMm(page, rectMm, { borderColor: dark, borderWidthPt: 2.0 });
+      withClipRectMm(page, insetRectMm(rectMm, 0.8), () => {
+        drawChevronsMm(page, rectMm, { color: palette.accent, alpha: 0.16, spacingMm: 5.2, thicknessPt: 0.7 });
+      });
+      drawTextPlateMm(page, textLayout, { style: 'hard', accent: palette.accent });
+      break;
+    }
+    case 15: {
+      drawRectMm(page, rectMm, { borderColor: dark, borderWidthPt: 2.6 });
+      drawRectMm(page, insetRectMm(rectMm, 0.8), { borderColor: palette.accent, borderWidthPt: 1.3 });
+      withClipRectMm(page, rectMm, () => {
+        drawGlowCornersMm(page, rectMm, { color: palette.accent, alpha: 0.2 });
+      });
+      drawTextPlateMm(page, textLayout, { style: 'hard', accent: palette.accent });
+      break;
+    }
+    default:
+      break;
+  }
+
+  drawTopText(page, fonts, rectMm, { heroName, miscText }, palette);
+  if (idx !== 8 && embeddedLogo && idx % 4 === 1) drawCornerLogoMm(page, embeddedLogo, rectMm, { corner: 'top-right', opacity: 0.75 });
+
+  if (idx !== 0) {
+    const sample = TOP_SAMPLE_VARIANTS[idx]?.id || String(idx);
+    const tag = { x: rectMm.x + 0.8, y: rectMm.y + 0.6, width: rectMm.width - 1.6, height: 2.8 };
+    drawTextMm(page, guideFont, sample, { x: tag.x, y: tag.y }, { sizeMm: 2.0, color: rgb(0.2, 0.2, 0.2) });
+  }
+}
+
+function drawTextPlateMm(page, textLayout, { style, accent }) {
+  const dark = rgb(0, 0, 0);
+  const light = rgb(1, 1, 1);
+  const titlePlate = expandRectMm(textLayout.titleBox, 0.9);
+  const miscPlate = textLayout.miscBox ? expandRectMm(textLayout.miscBox, 0.8) : null;
+
+  if (style === 'none') return;
+
+  if (style === 'soft') {
+    drawRectMm(page, titlePlate, { color: dark, opacity: 0.24 });
+    if (miscPlate) drawRectMm(page, miscPlate, { color: dark, opacity: 0.2 });
+    return;
+  }
+
+  if (style === 'hard') {
+    drawRectMm(page, titlePlate, { color: dark, opacity: 0.33 });
+    drawRectMm(page, titlePlate, { borderColor: accent, borderWidthPt: 0.7 });
+    if (miscPlate) drawRectMm(page, miscPlate, { color: dark, opacity: 0.26 });
+    return;
+  }
+
+  if (style === 'metal') {
+    drawRectMm(page, titlePlate, { color: rgb(0.85, 0.85, 0.88), opacity: 0.22 });
+    drawRectMm(page, titlePlate, { borderColor: light, borderWidthPt: 0.6 });
+    drawRectMm(page, titlePlate, { borderColor: accent, borderWidthPt: 0.35 });
+    if (miscPlate) drawRectMm(page, miscPlate, { color: dark, opacity: 0.18 });
+    return;
+  }
+
+  if (style === 'badge') {
+    const badge = expandRectMm(textLayout.titleBox, 2.2);
+    drawRectMm(page, badge, { color: dark, opacity: 0.28 });
+    drawRectMm(page, badge, { borderColor: accent, borderWidthPt: 1.0 });
+    return;
+  }
+}
+
+function drawAccentBarMm(page, rectMm, { color, opacity }) {
+  drawRectMm(page, rectMm, { color, opacity: Number.isFinite(opacity) ? opacity : 0.7 });
+  drawRectMm(page, rectMm, { borderColor: rgb(0, 0, 0), borderWidthPt: 0.45 });
+}
+
+function drawCornerBracketsMm(page, rectMm, { color, thicknessPt, lengthMm, insetMm, opacity }) {
+  const inset = Number(insetMm) || 1.5;
+  const len = Number(lengthMm) || 5;
+  const x0 = rectMm.x + inset;
+  const y0 = rectMm.y + inset;
+  const x1 = rectMm.x + rectMm.width - inset;
+  const y1 = rectMm.y + rectMm.height - inset;
+
+  const segs = [
+    // Top-left
+    { x1: x0, y1, x2: x0 + len, y2: y1 },
+    { x1: x0, y1, x2: x0, y2: y1 - len },
+    // Top-right
+    { x1: x1, y1, x2: x1 - len, y2: y1 },
+    { x1: x1, y1, x2: x1, y2: y1 - len },
+    // Bottom-left
+    { x1: x0, y1: y0, x2: x0 + len, y2: y0 },
+    { x1: x0, y1: y0, x2: x0, y2: y0 + len },
+    // Bottom-right
+    { x1: x1, y1: y0, x2: x1 - len, y2: y0 },
+    { x1: x1, y1: y0, x2: x1, y2: y0 + len },
+  ];
+
+  for (const seg of segs) {
+    drawSolidLineMm(page, seg, { color, thicknessPt: thicknessPt ?? 1.0, opacity });
+  }
+}
+
+function drawEdgeStripesMm(page, rectMm, { color, stripeMm, opacity }) {
+  const stripe = Math.max(0.6, Number(stripeMm) || 1.8);
+  const o = Number.isFinite(opacity) ? opacity : 0.85;
+  drawRectMm(page, { x: rectMm.x, y: rectMm.y, width: rectMm.width, height: stripe }, { color, opacity: o });
+  drawRectMm(page, { x: rectMm.x, y: rectMm.y + rectMm.height - stripe, width: rectMm.width, height: stripe }, { color, opacity: o });
+}
+
+function drawScanlinesMm(page, rectMm, { color, alpha, spacingMm, thicknessPt }) {
+  const spacing = Math.max(0.4, Number(spacingMm) || 0.8);
+  const opacity = Math.max(0, Math.min(1, Number(alpha) || 0.08));
+  for (let y = rectMm.y; y <= rectMm.y + rectMm.height; y += spacing) {
+    drawSolidLineMm(page, { x1: rectMm.x, y1: y, x2: rectMm.x + rectMm.width, y2: y }, { color, thicknessPt: thicknessPt ?? 0.4, opacity });
+  }
+}
+
+function drawRadialBurstMm(page, rectMm, { color, alpha, rays, thicknessPt }) {
+  const opacity = Math.max(0, Math.min(1, Number(alpha) || 0.18));
+  const count = clampInt(rays ?? 20, { min: 8, max: 80 });
+  const cx = rectMm.x + rectMm.width * 0.62;
+  const cy = rectMm.y + rectMm.height * 0.46;
+  const r = Math.max(rectMm.width, rectMm.height) * 1.2;
+  for (let i = 0; i < count; i++) {
+    const a = (i / count) * Math.PI * 2;
+    drawSolidLineMm(
+      page,
+      { x1: cx, y1: cy, x2: cx + Math.cos(a) * r, y2: cy + Math.sin(a) * r },
+      { color, thicknessPt: thicknessPt ?? 0.6, opacity },
+    );
+  }
+}
+
+function drawCornerHalftoneMm(page, rectMm, { color, alpha, dotMm, pitchMm, extentMm }) {
+  const opacity = Math.max(0, Math.min(1, Number(alpha) || 0.12));
+  const dot = Math.max(0.25, Number(dotMm) || 0.6);
+  const pitch = Math.max(dot * 1.2, Number(pitchMm) || 1.6);
+  const extent = Math.max(3, Number(extentMm) || 9);
+
+  const corners = [
+    { x: rectMm.x, y: rectMm.y },
+    { x: rectMm.x + rectMm.width - extent, y: rectMm.y },
+    { x: rectMm.x, y: rectMm.y + rectMm.height - extent },
+    { x: rectMm.x + rectMm.width - extent, y: rectMm.y + rectMm.height - extent },
+  ];
+
+  for (const c of corners) {
+    for (let ix = 0; ix <= extent; ix += pitch) {
+      for (let iy = 0; iy <= extent; iy += pitch) {
+        const dx = ix / extent;
+        const dy = iy / extent;
+        const falloff = 1 - Math.min(1, Math.sqrt(dx * dx + dy * dy));
+        if (falloff <= 0) continue;
+        page.drawCircle({
+          x: mmToPtCoord(c.x + ix + dot),
+          y: mmToPtCoord(c.y + iy + dot),
+          size: mmToPt(dot * 0.5),
+          color,
+          opacity: opacity * falloff,
+        });
+      }
+    }
+  }
+}
+
+function drawAngledSashMm(page, rectMm, { color, alpha, angleDeg, offsetMm } = {}) {
+  const angle = degrees(Number(angleDeg) || -12);
+  const o = Number.isFinite(alpha) ? alpha : 0.7;
+  const offsetX = Number(offsetMm?.x) || 0;
+  const offsetY = Number(offsetMm?.y) || 0;
+
+  const sashH = rectMm.height * 0.48;
+  const sashW = rectMm.width * 1.3;
+  const cx = rectMm.x + rectMm.width / 2 + offsetX;
+  const cy = rectMm.y + rectMm.height / 2 + offsetY;
+
+  page.drawRectangle({
+    x: mmToPt(cx - sashW / 2),
+    y: mmToPt(cy - sashH / 2),
+    width: mmToPt(sashW),
+    height: mmToPt(sashH),
+    color,
+    opacity: o,
+    rotate: angle,
+  });
+}
+
+function drawTechLinesMm(page, rectMm, { color, alpha, accent }) {
+  const opacity = Math.max(0, Math.min(1, Number(alpha) || 0.12));
+  const inset = insetRectMm(rectMm, 0.8);
+
+  drawCornerBracketsMm(page, inset, { color, thicknessPt: 0.7, lengthMm: 3.8, insetMm: 1.0, opacity });
+
+  const lines = [
+    { x1: inset.x + inset.width * 0.15, y1: inset.y + inset.height * 0.25, x2: inset.x + inset.width * 0.5, y2: inset.y + inset.height * 0.25 },
+    { x1: inset.x + inset.width * 0.5, y1: inset.y + inset.height * 0.25, x2: inset.x + inset.width * 0.5, y2: inset.y + inset.height * 0.65 },
+    { x1: inset.x + inset.width * 0.65, y1: inset.y + inset.height * 0.65, x2: inset.x + inset.width * 0.9, y2: inset.y + inset.height * 0.65 },
+    { x1: inset.x + inset.width * 0.78, y1: inset.y + inset.height * 0.12, x2: inset.x + inset.width * 0.78, y2: inset.y + inset.height * 0.4 },
+  ];
+
+  for (const seg of lines) drawSolidLineMm(page, seg, { color, thicknessPt: 0.55, opacity });
+
+  page.drawCircle({
+    x: mmToPtCoord(inset.x + inset.width * 0.5),
+    y: mmToPtCoord(inset.y + inset.height * 0.25),
+    size: mmToPt(0.7),
+    color: accent,
+    opacity: 0.9,
+  });
+  page.drawCircle({
+    x: mmToPtCoord(inset.x + inset.width * 0.78),
+    y: mmToPtCoord(inset.y + inset.height * 0.12),
+    size: mmToPt(0.6),
+    color: accent,
+    opacity: 0.9,
+  });
+}
+
+function drawRivetsMm(page, rectMm, { fill, stroke, radiusMm }) {
+  const r = Math.max(0.5, Number(radiusMm) || 0.9);
+  const inset = 1.6;
+  const pts = [
+    { x: rectMm.x + inset, y: rectMm.y + inset },
+    { x: rectMm.x + rectMm.width - inset, y: rectMm.y + inset },
+    { x: rectMm.x + inset, y: rectMm.y + rectMm.height - inset },
+    { x: rectMm.x + rectMm.width - inset, y: rectMm.y + rectMm.height - inset },
+  ];
+  for (const p of pts) {
+    page.drawCircle({
+      x: mmToPtCoord(p.x),
+      y: mmToPtCoord(p.y),
+      size: mmToPt(r),
+      color: fill,
+      borderColor: stroke,
+      borderWidth: 0.6,
+      opacity: 0.9,
+      borderOpacity: 0.85,
+    });
+    page.drawCircle({
+      x: mmToPtCoord(p.x + 0.22),
+      y: mmToPtCoord(p.y + 0.22),
+      size: mmToPt(r * 0.25),
+      color: stroke,
+      opacity: 0.5,
+    });
+  }
+}
+
+function drawDashedFrameMm(page, rectMm, { color, thicknessPt, dashMm }) {
+  const x0 = rectMm.x;
+  const y0 = rectMm.y;
+  const x1 = rectMm.x + rectMm.width;
+  const y1 = rectMm.y + rectMm.height;
+  drawDashedLineMm(page, { x1: x0, y1: y0, x2: x1, y2: y0 }, { color, thicknessPt, dashMm });
+  drawDashedLineMm(page, { x1: x0, y1: y1, x2: x1, y2: y1 }, { color, thicknessPt, dashMm });
+  drawDashedLineMm(page, { x1: x0, y1: y0, x2: x0, y2: y1 }, { color, thicknessPt, dashMm });
+  drawDashedLineMm(page, { x1: x1, y1: y0, x2: x1, y2: y1 }, { color, thicknessPt, dashMm });
+}
+
+function drawGridMm(page, rectMm, { color, alpha, spacingMm, thicknessPt }) {
+  const spacing = Math.max(1.2, Number(spacingMm) || 2.6);
+  const opacity = Math.max(0, Math.min(1, Number(alpha) || 0.06));
+  for (let x = rectMm.x; x <= rectMm.x + rectMm.width; x += spacing) {
+    drawSolidLineMm(page, { x1: x, y1: rectMm.y, x2: x, y2: rectMm.y + rectMm.height }, { color, thicknessPt: thicknessPt ?? 0.4, opacity });
+  }
+  for (let y = rectMm.y; y <= rectMm.y + rectMm.height; y += spacing) {
+    drawSolidLineMm(page, { x1: rectMm.x, y1: y, x2: rectMm.x + rectMm.width, y2: y }, { color, thicknessPt: thicknessPt ?? 0.4, opacity });
+  }
+}
+
+function drawTapeMm(page, rectMm, plateMm, { angleDeg, opacity }) {
+  const angle = degrees(Number(angleDeg) || -8);
+  const o = Number.isFinite(opacity) ? opacity : 0.28;
+  const pad = 1.0;
+  const tape = expandRectMm(plateMm, pad);
+  page.drawRectangle({
+    x: mmToPt(tape.x + rectMm.width * 0.02),
+    y: mmToPt(tape.y),
+    width: mmToPt(tape.width),
+    height: mmToPt(tape.height),
+    color: rgb(1, 1, 1),
+    opacity: o,
+    rotate: angle,
+  });
+  page.drawRectangle({
+    x: mmToPt(tape.x + rectMm.width * 0.02),
+    y: mmToPt(tape.y),
+    width: mmToPt(tape.width),
+    height: mmToPt(tape.height),
+    borderColor: rgb(0, 0, 0),
+    borderWidth: 0.35,
+    borderOpacity: Math.min(1, o + 0.15),
+    opacity: Math.min(1, o + 0.15),
+    rotate: angle,
+  });
+}
+
+function drawChevronsMm(page, rectMm, { color, alpha, spacingMm, thicknessPt }) {
+  const spacing = Math.max(3, Number(spacingMm) || 5.2);
+  const opacity = Math.max(0, Math.min(1, Number(alpha) || 0.16));
+  const inset = insetRectMm(rectMm, 0.6);
+  const midY = inset.y + inset.height / 2;
+  const h = inset.height * 0.38;
+  for (let x = inset.x - spacing; x <= inset.x + inset.width + spacing; x += spacing) {
+    drawSolidLineMm(page, { x1: x, y1: midY, x2: x + spacing / 2, y2: midY + h }, { color, thicknessPt: thicknessPt ?? 0.7, opacity });
+    drawSolidLineMm(page, { x1: x + spacing / 2, y1: midY + h, x2: x + spacing, y2: midY }, { color, thicknessPt: thicknessPt ?? 0.7, opacity });
+  }
+}
+
+function drawGlowCornersMm(page, rectMm, { color, alpha }) {
+  const opacity = Math.max(0, Math.min(1, Number(alpha) || 0.2));
+  const inset = 1.6;
+  const pts = [
+    { x: rectMm.x + inset, y: rectMm.y + inset },
+    { x: rectMm.x + rectMm.width - inset, y: rectMm.y + inset },
+    { x: rectMm.x + inset, y: rectMm.y + rectMm.height - inset },
+    { x: rectMm.x + rectMm.width - inset, y: rectMm.y + rectMm.height - inset },
+  ];
+  for (const p of pts) {
+    page.drawCircle({ x: mmToPtCoord(p.x), y: mmToPtCoord(p.y), size: mmToPt(1.8), color, opacity: opacity * 0.35 });
+    page.drawCircle({ x: mmToPtCoord(p.x), y: mmToPtCoord(p.y), size: mmToPt(1.0), color, opacity: opacity * 0.6 });
+  }
+}
+
+function drawCornerLogoMm(page, embeddedLogo, rectMm, { corner, opacity }) {
+  const maxH = Math.min(5.8, rectMm.height * 0.34);
+  const maxW = Math.min(18, rectMm.width * 0.35);
+  const pad = 1.2;
+  const box = { x: rectMm.x + pad, y: rectMm.y + rectMm.height - maxH - pad, width: maxW, height: maxH };
+  const cornerKey = String(corner || '').toLowerCase();
+  if (cornerKey === 'top-right') {
+    box.x = rectMm.x + rectMm.width - maxW - pad;
+    box.y = rectMm.y + rectMm.height - maxH - pad;
+  } else if (cornerKey === 'bottom-right') {
+    box.x = rectMm.x + rectMm.width - maxW - pad;
+    box.y = rectMm.y + pad;
+  } else if (cornerKey === 'bottom-left') {
+    box.x = rectMm.x + pad;
+    box.y = rectMm.y + pad;
+  }
+  drawImageContainMm(page, embeddedLogo, box, { opacity: Number.isFinite(opacity) ? opacity : 0.8 });
 }
 
 function drawSolidLineMm(page, segMm, { color, thicknessPt, opacity } = {}) {
@@ -939,4 +1822,5 @@ function format1(n) {
 
 module.exports = {
   buildTuckBoxPdf,
+  buildTuckBoxTopSampleSheetPdf,
 };
