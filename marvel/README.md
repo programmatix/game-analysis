@@ -40,10 +40,10 @@ Useful flags:
 
 ### Tuckbox generator
 
-Generate a tuckbox net sized for sleeved Marvel Champions cards (defaults to `91×66mm` sleeves). The default output is a 2-page PDF intended for duplex printing: outside art on page 1, and all cut/fold marks + ZA/L# labels on page 2.
+Generate a tuckbox net from explicit internal box dimensions. The default output is a 2-page PDF intended for duplex printing: outside art on page 1, and all cut/fold marks + ZA/L# labels on page 2.
 
 ```bash
-npx marvel-tuckbox --hero "Cyclops" --text "Leadership\\nAggression" --thickness-mm 32 --output cyclops-tuckbox.pdf
+npx marvel-tuckbox --hero "Cyclops" --text "Leadership\\nAggression" --inner-depth-mm 32 --output cyclops-tuckbox.pdf
 ```
 
 Useful flags:

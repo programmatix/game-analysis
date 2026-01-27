@@ -12,10 +12,9 @@ async function main() {
     .description('Generate a printable A4 tuckbox template for Marvel Champions decks (defaults to duplex: outside + marks)')
     .requiredOption('--hero <name>', 'Hero name (shown on front/top)')
     .option('--text <text>', 'Misc text (supports literal \\n for line breaks)', '')
-    .option('--thickness-mm <number>', 'Deck thickness in millimetres', '30')
-    .option('--sleeve-width-mm <number>', 'Sleeve width in millimetres', '66')
-    .option('--sleeve-height-mm <number>', 'Sleeve height in millimetres', '91')
-    .option('--clearance-mm <number>', 'Extra clearance to add to all internal dimensions', '2')
+    .option('--inner-width-mm <number>', 'Internal box width in millimetres', '68')
+    .option('--inner-height-mm <number>', 'Internal box height in millimetres', '93')
+    .option('--inner-depth-mm <number>', 'Internal box depth in millimetres', '32')
     .option('--glue-flap-mm <number>', 'Glue flap width in millimetres', '8')
     .option('--tuck-extra-mm <number>', 'Extra tuck tab length beyond the top/bottom face depth', '15')
     .option('--margin-mm <number>', 'Minimum page margin for the net (0 maximizes usable area)', '0')
@@ -43,10 +42,9 @@ async function main() {
   const outputPath = resolveOutputPath(opts.output, hero);
 
   const numbers = {
-    thicknessMm: parseNumber('--thickness-mm', opts.thicknessMm, errors, { min: 0.1 }),
-    sleeveWidthMm: parseNumber('--sleeve-width-mm', opts.sleeveWidthMm, errors, { min: 1 }),
-    sleeveHeightMm: parseNumber('--sleeve-height-mm', opts.sleeveHeightMm, errors, { min: 1 }),
-    clearanceMm: parseNumber('--clearance-mm', opts.clearanceMm, errors, { min: 0 }),
+    innerWidthMm: parseNumber('--inner-width-mm', opts.innerWidthMm, errors, { min: 1 }),
+    innerHeightMm: parseNumber('--inner-height-mm', opts.innerHeightMm, errors, { min: 1 }),
+    innerDepthMm: parseNumber('--inner-depth-mm', opts.innerDepthMm, errors, { min: 0.1 }),
     glueFlapMm: parseNumber('--glue-flap-mm', opts.glueFlapMm, errors, { min: 1 }),
     tuckExtraMm: parseNumber('--tuck-extra-mm', opts.tuckExtraMm, errors, { min: 0 }),
     marginMm: parseNumber('--margin-mm', opts.marginMm, errors, { min: 0 }),

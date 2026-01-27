@@ -135,7 +135,8 @@ function drawFrontGlueMarks(page, { guideFont }, layout, palette, { duplex }) {
   if (!duplex) return;
   const zones = buildZoneLabels(layout);
   for (const zone of zones) {
-    if (!zone.isGlue || zone.glueFace !== 'front') continue;
+    const wantFrontGlue = (zone.isGlue && zone.glueFace === 'front') || zone.label === 'ZA';
+    if (!wantFrontGlue) continue;
     drawFrontGlueMark(page, guideFont, zone.rectMm, palette);
   }
 }
@@ -258,11 +259,12 @@ function drawFrontText(page, fonts, frontMm, { heroName, miscText }, palette) {
 
 function drawTopText(page, fonts, topFaceMm, { heroName, miscText }, palette) {
   const inset = insetRectMm(topFaceMm, 2);
+  const yShiftDownMm = 1.2;
 
   const title = heroName || 'Hero';
   const titleSizeMm = fitTextSizeMm(fonts.title, title, inset.width, 8, 3.5);
   const titleHeightMm = titleSizeMm * 1.12;
-  const titleBox = { x: inset.x, y: inset.y + inset.height - titleHeightMm, width: inset.width, height: titleHeightMm };
+  const titleBox = { x: inset.x, y: inset.y + inset.height - titleHeightMm - yShiftDownMm, width: inset.width, height: titleHeightMm };
   drawCenteredTextOutlineMm(page, fonts.title, title, titleBox, {
     sizePt: mmToPt(titleSizeMm),
     color: palette.white,
@@ -273,7 +275,7 @@ function drawTopText(page, fonts, topFaceMm, { heroName, miscText }, palette) {
 
   if (!miscText.lines.length) return;
   const miscSizeMm = Math.min(3.6, titleSizeMm * 0.55);
-  const miscBox = { x: inset.x, y: inset.y, width: inset.width, height: inset.height - titleHeightMm + 0.5 };
+  const miscBox = { x: inset.x, y: inset.y - yShiftDownMm, width: inset.width, height: inset.height - titleHeightMm + 0.5 };
   drawWrappedTextOutlineMm(page, fonts.body, miscText.lines.join('\n'), miscBox, {
     sizePt: mmToPt(miscSizeMm),
     color: rgb(0.92, 0.92, 0.92),
@@ -355,18 +357,34 @@ function labelSegments(layout) {
   for (const seg of layout.segments.fold) all.push({ type: 'fold', seg });
 
   all.sort((a, b) => {
-    const aIsH = a.seg.y1 === a.seg.y2;
-    const bIsH = b.seg.y1 === b.seg.y2;
-    if (aIsH !== bIsH) return aIsH ? -1 : 1;
-    const aFixed = aIsH ? a.seg.y1 : a.seg.x1;
-    const bFixed = bIsH ? b.seg.y1 : b.seg.x1;
-    if (aFixed !== bFixed) return aFixed - bFixed;
-    const aA = aIsH ? a.seg.x1 : a.seg.y1;
-    const bA = bIsH ? b.seg.x1 : b.seg.y1;
-    if (aA !== bA) return aA - bA;
-    const aB = aIsH ? a.seg.x2 : a.seg.y2;
-    const bB = bIsH ? b.seg.x2 : b.seg.y2;
-    if (aB !== bB) return aB - bB;
+    const aKind = a.seg.y1 === a.seg.y2 ? 'h' : a.seg.x1 === a.seg.x2 ? 'v' : 'd';
+    const bKind = b.seg.y1 === b.seg.y2 ? 'h' : b.seg.x1 === b.seg.x2 ? 'v' : 'd';
+    const order = { h: 0, v: 1, d: 2 };
+    if (aKind !== bKind) return order[aKind] - order[bKind];
+
+    if (aKind === 'h') {
+      if (a.seg.y1 !== b.seg.y1) return a.seg.y1 - b.seg.y1;
+      if (a.seg.x1 !== b.seg.x1) return a.seg.x1 - b.seg.x1;
+      if (a.seg.x2 !== b.seg.x2) return a.seg.x2 - b.seg.x2;
+    } else if (aKind === 'v') {
+      if (a.seg.x1 !== b.seg.x1) return a.seg.x1 - b.seg.x1;
+      if (a.seg.y1 !== b.seg.y1) return a.seg.y1 - b.seg.y1;
+      if (a.seg.y2 !== b.seg.y2) return a.seg.y2 - b.seg.y2;
+    } else {
+      const aMinY = Math.min(a.seg.y1, a.seg.y2);
+      const bMinY = Math.min(b.seg.y1, b.seg.y2);
+      if (aMinY !== bMinY) return aMinY - bMinY;
+      const aMinX = Math.min(a.seg.x1, a.seg.x2);
+      const bMinX = Math.min(b.seg.x1, b.seg.x2);
+      if (aMinX !== bMinX) return aMinX - bMinX;
+      const aMaxY = Math.max(a.seg.y1, a.seg.y2);
+      const bMaxY = Math.max(b.seg.y1, b.seg.y2);
+      if (aMaxY !== bMaxY) return aMaxY - bMaxY;
+      const aMaxX = Math.max(a.seg.x1, a.seg.x2);
+      const bMaxX = Math.max(b.seg.x1, b.seg.x2);
+      if (aMaxX !== bMaxX) return aMaxX - bMaxX;
+    }
+
     if (a.type !== b.type) return a.type === 'cut' ? -1 : 1;
     return 0;
   });
@@ -376,6 +394,7 @@ function labelSegments(layout) {
 
 function drawLineLabel(page, guideFont, { label, type, seg }, palette) {
   const isH = seg.y1 === seg.y2;
+  const isV = seg.x1 === seg.x2;
   const midX = (seg.x1 + seg.x2) / 2;
   const midY = (seg.y1 + seg.y2) / 2;
   const color = type === 'cut' ? palette.cut : palette.fold;
@@ -393,7 +412,7 @@ function drawLineLabel(page, guideFont, { label, type, seg }, palette) {
   const boxHPt = sizePt + subSizePt + mmToPt(padMm * 2) + mmToPt(0.5);
 
   const offsetMm = 1.2;
-  const anchorMm = isH ? { x: midX, y: midY + offsetMm } : { x: midX + offsetMm, y: midY };
+  const anchorMm = isH ? { x: midX, y: midY + offsetMm } : isV ? { x: midX + offsetMm, y: midY } : { x: midX + offsetMm, y: midY + offsetMm };
   let boxMm = {
     x: anchorMm.x - ptToMm(boxWPt) / 2,
     y: anchorMm.y - ptToMm(boxHPt) / 2,
@@ -436,16 +455,13 @@ function buildZoneLabels(layout) {
     ['side-left', 'ZC'],
     ['front', 'ZD'],
     ['side-right', 'ZE'],
-    ['top-back', 'ZF'],
-    ['top-side-left', 'ZG'],
-    ['top-side-right', 'ZH'],
     ['bottom-back-tuck', 'ZI'],
     ['bottom-side-left', 'ZJ'],
-    ['bottom-front', 'ZK'],
-    ['bottom-side-right', 'ZL'],
     ['top-face', 'ZM'],
     ['top-tuck-tab', 'ZN'],
     ['bottom-tuck-tab', 'ZO'],
+    ['top-face-tab-left', 'ZP'],
+    ['top-face-tab-right', 'ZQ'],
   ]);
 
   const pushRect = rectMm => {
@@ -536,9 +552,7 @@ function drawLegend(page, { guideFont }, layout, palette, { duplex } = {}) {
   drawTextMm(page, guideFont, title, { x: legend.x + 3, y: legend.y + legend.height - 7 }, { sizeMm: 3.2, color: palette.cut });
 
   const dims = layout.dimensionsMm;
-  const line1 = `Sleeve: ${format1(dims.sleeveHeightMm)}×${format1(dims.sleeveWidthMm)}mm • Thickness: ${format1(
-    dims.thicknessMm
-  )}mm`;
+  const line1 = `Inner: ${format1(dims.innerHeightMm)}×${format1(dims.innerWidthMm)}×${format1(dims.innerDepthMm)}mm`;
   drawTextMm(page, guideFont, line1, { x: legend.x + 3, y: legend.y + legend.height - 12 }, { sizeMm: 2.7, color: palette.cut });
 
   const cutY = legend.y + 6.5;

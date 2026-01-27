@@ -4,10 +4,9 @@ const { computeTuckBoxLayout } = require('./tuckbox-layout');
 
 test('computeTuckBoxLayout: defaults fit A4 portrait', () => {
   const layout = computeTuckBoxLayout({
-    sleeveWidthMm: 66,
-    sleeveHeightMm: 91,
-    thicknessMm: 30,
-    clearanceMm: 2,
+    innerWidthMm: 68,
+    innerHeightMm: 93,
+    innerDepthMm: 32,
     glueFlapMm: 8,
     tuckExtraMm: 15,
     marginMm: 0,
@@ -21,10 +20,9 @@ test('computeTuckBoxLayout: defaults fit A4 portrait', () => {
 
 test('computeTuckBoxLayout: thicker decks switch to A4 landscape when needed', () => {
   const layout = computeTuckBoxLayout({
-    sleeveWidthMm: 66,
-    sleeveHeightMm: 91,
-    thicknessMm: 40,
-    clearanceMm: 2,
+    innerWidthMm: 68,
+    innerHeightMm: 93,
+    innerDepthMm: 42,
     glueFlapMm: 8,
     tuckExtraMm: 15,
     marginMm: 0,
@@ -38,10 +36,9 @@ test('computeTuckBoxLayout: throws when net cannot fit on A4', () => {
   assert.throws(
     () =>
       computeTuckBoxLayout({
-        sleeveWidthMm: 66,
-        sleeveHeightMm: 91,
-        thicknessMm: 60,
-        clearanceMm: 2,
+        innerWidthMm: 68,
+        innerHeightMm: 93,
+        innerDepthMm: 70,
         glueFlapMm: 8,
         tuckExtraMm: 15,
         marginMm: 0,
@@ -50,4 +47,3 @@ test('computeTuckBoxLayout: throws when net cannot fit on A4', () => {
     /does not fit on a single A4 sheet/i
   );
 });
-

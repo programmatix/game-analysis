@@ -1,18 +1,13 @@
 const { A4_WIDTH_MM, A4_HEIGHT_MM } = require('../../shared/pdf-layout');
 
 function computeTuckBoxLayout(options) {
-  const sleeveWidthMm = requirePositiveNumber('--sleeve-width-mm', options.sleeveWidthMm);
-  const sleeveHeightMm = requirePositiveNumber('--sleeve-height-mm', options.sleeveHeightMm);
-  const thicknessMm = requirePositiveNumber('--thickness-mm', options.thicknessMm);
+  const innerWidthMm = requirePositiveNumber('--inner-width-mm', options.innerWidthMm ?? options.innerWidth);
+  const innerHeightMm = requirePositiveNumber('--inner-height-mm', options.innerHeightMm ?? options.innerHeight);
+  const innerDepthMm = requirePositiveNumber('--inner-depth-mm', options.innerDepthMm ?? options.innerDepth);
 
-  const clearanceMm = requireNonNegativeNumber('--clearance-mm', options.clearanceMm ?? 2);
   const glueFlapMm = requirePositiveNumber('--glue-flap-mm', options.glueFlapMm ?? 8);
   const tuckExtraMm = requireNonNegativeNumber('--tuck-extra-mm', options.tuckExtraMm ?? 15);
   const marginMm = requireNonNegativeNumber('--margin-mm', options.marginMm ?? 0);
-
-  const innerWidthMm = sleeveWidthMm + clearanceMm;
-  const innerHeightMm = sleeveHeightMm + clearanceMm;
-  const innerDepthMm = thicknessMm + clearanceMm;
 
   const W = innerWidthMm;
   const H = innerHeightMm;
@@ -55,7 +50,7 @@ function computeTuckBoxLayout(options) {
       `- Required net size: ${formatMm(netWidthMm)}mm × ${formatMm(netHeightMm)}mm`,
       `- A4 portrait usable area: ${portraitAvailable.usable}`,
       `- A4 landscape usable area: ${landscapeAvailable.usable}`,
-      `Try reducing --thickness-mm, --clearance-mm, --tuck-extra-mm, or --glue-flap-mm.`,
+      `Try reducing --inner-width-mm, --inner-height-mm, --inner-depth-mm, --tuck-extra-mm, or --glue-flap-mm.`,
     ];
     throw new Error(lines.join('\n'));
   }
@@ -82,11 +77,16 @@ function computeTuckBoxLayout(options) {
   rects.push(rect('front', xFront, bodyY, W, H));
   rects.push(rect('side-right', xSide2, bodyY, D, H));
 
-  rects.push(rect('top-back', xBack, bodyTopY, W, D));
+  // Optional flaps/tabs above body.
   rects.push(rect('top-front-tuck', xFront, bodyTopY, W, topTuckFlapHeight));
 
   rects.push(rect('bottom-back-tuck', xBack, bodyY - bottomTuckFlapHeight, W, bottomTuckFlapHeight));
   rects.push(rect('bottom-side-left', xSide1, bodyY - D, D, D));
+
+  const topFace = rect('top-face', xFront, bodyTopY, W, D);
+  const topSideTabMm = 10;
+  rects.push(rect('top-face-tab-left', topFace.x - topSideTabMm, topFace.y, topSideTabMm, topFace.height));
+  rects.push(rect('top-face-tab-right', topFace.x + topFace.width, topFace.y, topSideTabMm, topFace.height));
 
   const { cutSegments, foldSegments } = computeSegments(rects);
 
@@ -101,6 +101,12 @@ function computeTuckBoxLayout(options) {
   const spineBottomSeam = hSegment(xSide1, xFront, bodyY);
   moveSegmentBetweenLists(foldSegments, cutSegments, spineBottomSeam);
 
+  // Tapers / chamfers for easier tucking/gluing.
+  applyTopTuckTabTaper(cutSegments, { x: xFront, y: bodyTopY + D, width: W, height: tuckExtraMm }, 3);
+  applyGlueFlapCornerChamfer(cutSegments, { x: xGlue, y: bodyY, width: glueFlapMm, height: H }, 3);
+  applySideTabCornerChamfers(cutSegments, { x: topFace.x - topSideTabMm, y: topFace.y, width: topSideTabMm, height: D }, 2, 'left');
+  applySideTabCornerChamfers(cutSegments, { x: topFace.x + topFace.width, y: topFace.y, width: topSideTabMm, height: D }, 2, 'right');
+
   return {
     orientation: fit.orientation,
     pageWidthMm,
@@ -109,10 +115,6 @@ function computeTuckBoxLayout(options) {
     netWidthMm,
     netHeightMm,
     dimensionsMm: {
-      sleeveWidthMm,
-      sleeveHeightMm,
-      thicknessMm,
-      clearanceMm,
       glueFlapMm,
       tuckExtraMm,
       innerWidthMm,
@@ -130,15 +132,108 @@ function computeTuckBoxLayout(options) {
     flaps: {
       topFrontTuck: findRect(rects, 'top-front-tuck'),
       bottomBackTuck: findRect(rects, 'bottom-back-tuck'),
-      topBack: findRect(rects, 'top-back'),
     },
-    topFace: rect('top-face', xFront, bodyTopY, W, D),
+    topFace,
     rects,
     segments: {
       cut: cutSegments,
       fold: [...foldSegments, ...extraFoldSegments],
     },
   };
+}
+
+function applyTopTuckTabTaper(cutSegments, rectMm, taperMm) {
+  const taper = Math.max(0, Number(taperMm) || 0);
+  const x = rectMm.x;
+  const y = rectMm.y;
+  const w = rectMm.width;
+  const h = rectMm.height;
+  if (!(taper > 0) || !(h > 0) || w <= taper * 2) return;
+
+  const baseY = y;
+  const topY = y + h;
+
+  // The flap side edges are typically single segments (not pre-split at baseY),
+  // so remove the whole edge and re-add the untapered portion below baseY.
+  const fullEdgeLeft = cutSegments.find(seg => seg.x1 === x && seg.x2 === x && seg.y1 <= baseY && seg.y2 >= topY);
+  const fullEdgeRight = cutSegments.find(seg => seg.x1 === x + w && seg.x2 === x + w && seg.y1 <= baseY && seg.y2 >= topY);
+  if (fullEdgeLeft) removeCutSegment(cutSegments, fullEdgeLeft);
+  if (fullEdgeRight) removeCutSegment(cutSegments, fullEdgeRight);
+  removeCutSegment(cutSegments, hSegment(x, x + w, topY));
+
+  if (fullEdgeLeft && fullEdgeLeft.y1 < baseY) cutSegments.push(vSegment(x, fullEdgeLeft.y1, baseY));
+  if (fullEdgeRight && fullEdgeRight.y1 < baseY) cutSegments.push(vSegment(x + w, fullEdgeRight.y1, baseY));
+  cutSegments.push(diagSegment(x, baseY, x + taper, topY));
+  cutSegments.push(diagSegment(x + w, baseY, x + w - taper, topY));
+  cutSegments.push(hSegment(x + taper, x + w - taper, topY));
+  cutSegments.sort(compareSegments);
+}
+
+function applyGlueFlapCornerChamfer(cutSegments, rectMm, chamferMm) {
+  const c = Math.max(0, Number(chamferMm) || 0);
+  const x = rectMm.x;
+  const y = rectMm.y;
+  const w = rectMm.width;
+  const h = rectMm.height;
+  if (!(c > 0) || w <= c || h <= c * 2) return;
+
+  const xLeft = x;
+  const xRight = x + w;
+  const yBottom = y;
+  const yTop = y + h;
+
+  removeCutSegment(cutSegments, vSegment(xLeft, yBottom, yTop));
+  removeCutSegment(cutSegments, hSegment(xLeft, xRight, yBottom));
+  removeCutSegment(cutSegments, hSegment(xLeft, xRight, yTop));
+
+  cutSegments.push(vSegment(xLeft, yBottom + c, yTop - c));
+  cutSegments.push(hSegment(xLeft + c, xRight, yBottom));
+  cutSegments.push(hSegment(xLeft + c, xRight, yTop));
+  cutSegments.push(diagSegment(xLeft + c, yBottom, xLeft, yBottom + c));
+  cutSegments.push(diagSegment(xLeft, yTop - c, xLeft + c, yTop));
+  cutSegments.sort(compareSegments);
+}
+
+function applySideTabCornerChamfers(cutSegments, rectMm, chamferMm, outerEdge = 'left') {
+  const c = Math.max(0, Number(chamferMm) || 0);
+  const x = rectMm.x;
+  const y = rectMm.y;
+  const w = rectMm.width;
+  const h = rectMm.height;
+  if (!(c > 0) || w <= c || h <= c * 2) return;
+
+  // Chamfer the outer edge (the edge furthest from the top face).
+  const xOuter = outerEdge === 'right' ? x + w : x;
+  const xInner = outerEdge === 'right' ? x : x + w;
+  const yBottom = y;
+  const yTop = y + h;
+
+  removeCutSegment(cutSegments, vSegment(xOuter, yBottom, yTop));
+  removeCutSegment(cutSegments, hSegment(Math.min(xOuter, xInner), Math.max(xOuter, xInner), yBottom));
+  removeCutSegment(cutSegments, hSegment(Math.min(xOuter, xInner), Math.max(xOuter, xInner), yTop));
+
+  cutSegments.push(vSegment(xOuter, yBottom + c, yTop - c));
+  const xChamfer = xOuter + (outerEdge === 'right' ? -c : c);
+  cutSegments.push(hSegment(Math.min(xChamfer, xInner), Math.max(xChamfer, xInner), yBottom));
+  cutSegments.push(hSegment(Math.min(xChamfer, xInner), Math.max(xChamfer, xInner), yTop));
+  cutSegments.push(diagSegment(xChamfer, yBottom, xOuter, yBottom + c));
+  cutSegments.push(diagSegment(xOuter, yTop - c, xChamfer, yTop));
+  cutSegments.sort(compareSegments);
+}
+
+function removeCutSegment(cutSegments, target) {
+  const idx = cutSegments.findIndex(seg => sameSegment(seg, target, 1e-6));
+  if (idx === -1) return false;
+  cutSegments.splice(idx, 1);
+  return true;
+}
+
+function vSegment(x, y1, y2) {
+  return { x1: x, y1: Math.min(y1, y2), x2: x, y2: Math.max(y1, y2) };
+}
+
+function diagSegment(x1, y1, x2, y2) {
+  return { x1, y1, x2, y2 };
 }
 
 function moveSegmentBetweenLists(fromList, toList, target, epsilon = 1e-6) {
