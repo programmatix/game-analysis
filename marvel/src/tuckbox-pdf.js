@@ -312,7 +312,7 @@ function drawFrontLogoImage(page, embeddedImage, frontMm) {
   const scale = 1.5;
   const maxWidthMm = Math.min(26 * scale, frontMm.width * 0.38 * scale);
   const maxHeightMm = 12 * scale;
-  const x = frontMm.x + 3;
+  const x = frontMm.x + (frontMm.width - maxWidthMm) / 2;
   const y = frontMm.y + frontMm.height - maxHeightMm - 3;
   drawImageContainMm(page, embeddedImage, { x, y, width: maxWidthMm, height: maxHeightMm }, { opacity: 0.98 });
 }
