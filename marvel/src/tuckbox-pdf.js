@@ -467,8 +467,16 @@ function drawGuides(page, layout, palette) {
 function drawLineLabels(page, { guideFont }, layout, palette) {
   const candidates = collectSegmentsForLabels(layout);
   const labeled = pickNonOverlappingLabelSegments(page, guideFont, candidates);
+
+  drawExtendedCutLinesToPaperEdge(page, labeled, palette);
   for (const item of labeled) {
     drawLineLabel(page, guideFont, item, palette);
+  }
+
+  const zaLeftEdge = findZaLeftOuterCutSegment(layout);
+  if (zaLeftEdge) {
+    drawExtendedAxisLineToPaperEdgeMm(page, zaLeftEdge, { color: palette.cut, thicknessPt: 0.8 });
+    drawLineLabel(page, guideFont, { label: 'LZA', type: 'cut', seg: zaLeftEdge }, palette);
   }
 }
 
@@ -479,6 +487,67 @@ function collectSegmentsForLabels(layout) {
   for (const seg of cut) all.push({ type: 'cut', seg });
   for (const seg of fold) all.push({ type: 'fold', seg });
   return all;
+}
+
+const EXTEND_CUT_LINES_TO_PAPER_EDGE = new Set(['L1', 'L12', 'L22']);
+
+function drawExtendedCutLinesToPaperEdge(page, labeled, palette) {
+  for (const item of Array.isArray(labeled) ? labeled : []) {
+    if (item.type !== 'cut') continue;
+    if (!EXTEND_CUT_LINES_TO_PAPER_EDGE.has(item.label)) continue;
+    drawExtendedAxisLineToPaperEdgeMm(page, item.seg, { color: palette.cut, thicknessPt: 0.8 });
+  }
+}
+
+function drawExtendedAxisLineToPaperEdgeMm(page, segMm, { color, thicknessPt } = {}) {
+  const pageWidthMm = ptToMm(page.getWidth());
+  const pageHeightMm = ptToMm(page.getHeight());
+
+  const isH = segMm.y1 === segMm.y2;
+  const isV = segMm.x1 === segMm.x2;
+  if (!isH && !isV) return;
+
+  if (isH) {
+    const y = segMm.y1;
+    const xMin = Math.min(segMm.x1, segMm.x2);
+    const xMax = Math.max(segMm.x1, segMm.x2);
+    if (xMin > 0) drawSolidLineMm(page, { x1: 0, y1: y, x2: xMin, y2: y }, { color, thicknessPt });
+    if (xMax < pageWidthMm) drawSolidLineMm(page, { x1: xMax, y1: y, x2: pageWidthMm, y2: y }, { color, thicknessPt });
+    return;
+  }
+
+  const x = segMm.x1;
+  const yMin = Math.min(segMm.y1, segMm.y2);
+  const yMax = Math.max(segMm.y1, segMm.y2);
+  if (yMin > 0) drawSolidLineMm(page, { x1: x, y1: 0, x2: x, y2: yMin }, { color, thicknessPt });
+  if (yMax < pageHeightMm) drawSolidLineMm(page, { x1: x, y1: yMax, x2: x, y2: pageHeightMm }, { color, thicknessPt });
+}
+
+function findZaLeftOuterCutSegment(layout) {
+  const glue = layout?.body?.glue;
+  if (!glue) return null;
+
+  const xTarget = Number(glue.x);
+  if (!Number.isFinite(xTarget)) return null;
+
+  const eps = 1e-6;
+  const mergedCut = mergeAxisAlignedSegments(layout.segments.cut);
+
+  const y0 = Number(glue.y);
+  const y1 = Number(glue.y + glue.height);
+  if (!Number.isFinite(y0) || !Number.isFinite(y1)) return null;
+
+  let best = null;
+  let bestOverlap = 0;
+  for (const seg of mergedCut) {
+    if (seg.x1 !== seg.x2) continue;
+    if (Math.abs(seg.x1 - xTarget) > eps) continue;
+    const overlap = Math.max(0, Math.min(seg.y2, y1) - Math.max(seg.y1, y0));
+    if (overlap <= bestOverlap + 1e-9) continue;
+    bestOverlap = overlap;
+    best = seg;
+  }
+  return best;
 }
 
 function pickNonOverlappingLabelSegments(page, guideFont, segments) {
