@@ -29,6 +29,8 @@ async function main() {
     .option('--no-logo', 'Disable the logo entirely', false)
     .option('--back <file>', 'Back panel image (PNG/JPG). Defaults to assets/cardback.png', '')
     .option('--no-duplex', 'Generate a 1-page single-sided template (cut/fold marks on front)')
+    .option('--print', 'Print mode: hide zone/line labels (keeps cut/fold guides)', false)
+    .option('--forgiving', 'Alias of --print (deprecated)', false)
     .option('--fonts-dir <dir>', 'Directory containing Marvel Champions fonts (TTF/OTF)', path.join(__dirname, '..', 'assets', 'fonts'))
     .option('--font-config <file>', 'JSON mapping font keys to file paths (optional)', '')
     .option('--page-size <a4|letter>', 'Page size for printing', 'a4')
@@ -83,6 +85,7 @@ async function main() {
     noLogo: Boolean(opts.noLogo),
     backPath: opts.back,
     duplex: Boolean(opts.duplex),
+    print: Boolean(opts.print) || Boolean(opts.forgiving),
     fontsDir: opts.fontsDir,
     fontOverrides,
     pageSize,

@@ -54,6 +54,7 @@ Useful flags:
 - `--logo` sets the Marvel Champions logo image (default: `assets/logo.png`); use `--no-logo` to disable.
 - `--back` sets the back-panel image (default: `assets/cardback.png`).
 - `--aspect justice|leadership|aggression|protection|basic|pool` sets a preset accent color (overrides `--accent`).
+- `--print` hides the back-side zone/line labels (keeps cut/fold guides).
 - Use `--no-duplex` to generate a 1-page single-sided template.
 - `--page-size a4|letter` selects the paper size (use `letter` for many US printers).
 - `--fonts-dir` and `--font-config` load the official Marvel Champions fonts when you have them locally (otherwise it falls back to Helvetica).

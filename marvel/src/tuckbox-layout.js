@@ -90,8 +90,11 @@ function computeTuckBoxLayout(options) {
   // Optional flaps/tabs above body.
   rects.push(rect('top-front-tuck', xFront, bodyTopY, W, topTuckFlapHeight));
 
-  rects.push(rect('bottom-back-tuck', xBack, bodyY - bottomTuckFlapHeight, W, bottomTuckFlapHeight));
-  rects.push(rect('bottom-side-left', xSide1, bodyY - D, D, D));
+  // Bottom flap under the front panel (ZI) plus a side glue flap to the right (ZJ).
+  const bottomBackTuck = rect('bottom-back-tuck', xFront, bodyY - bottomTuckFlapHeight, W, bottomTuckFlapHeight);
+  rects.push(bottomBackTuck);
+  const bottomSideLeft = rect('bottom-side-left', xSide2, bodyY - D, D, D);
+  rects.push(bottomSideLeft);
 
   const topFace = rect('top-face', xFront, bodyTopY, W, D);
   const topSideTabMm = 10;
@@ -103,19 +106,38 @@ function computeTuckBoxLayout(options) {
   const extraFoldSegments = [
     // Crease for the tuck tab: first D mm is top/bottom face, the rest tucks inside.
     hSegment(xFront, xFront + W, bodyTopY + D),
-    hSegment(xBack, xBack + W, bodyY - D),
   ];
+
+  // Fold between the bottom face depth (ZI) and the extra tuck tab (ZO).
+  if (tuckExtraMm > 0) {
+    extraFoldSegments.push(hSegment(xFront, xFront + W, bodyY - D));
+  }
 
   // Override: the fold line under the left spine panel should be cut (requested as L8 with defaults).
   // This is the horizontal segment on the body seam spanning the left spine width.
   const spineBottomSeam = hSegment(xSide1, xFront, bodyY);
   moveSegmentBetweenLists(foldSegments, cutSegments, spineBottomSeam);
 
+  // Detach the bottom-side glue flap from the body for easier gluing (line above ZJ).
+  const bottomSideSeam = hSegment(xSide2, xSide2 + D, bodyY);
+  moveSegmentBetweenLists(foldSegments, cutSegments, bottomSideSeam);
+
+  // Detach the bottom-side glue flap from the bottom back tuck (cut line to the right of L3).
+  const bottomSideInnerSeam = vSegment(xSide2, bodyY - D, bodyY);
+  moveSegmentBetweenLists(foldSegments, cutSegments, bottomSideInnerSeam);
+
   // Tapers / chamfers for easier tucking/gluing.
   applyTopTuckTabTaper(cutSegments, { x: xFront, y: bodyTopY + D, width: W, height: tuckExtraMm }, 3);
   applyGlueFlapCornerChamfer(cutSegments, { x: xGlue, y: bodyY, width: glueFlapMm, height: H }, 3);
   applySideTabCornerChamfers(cutSegments, { x: topFace.x - topSideTabMm, y: topFace.y, width: topSideTabMm, height: D }, 2, 'left');
   applySideTabCornerChamfers(cutSegments, { x: topFace.x + topFace.width, y: topFace.y, width: topSideTabMm, height: D }, 2, 'right');
+
+  // ZO: bottom tuck tab taper.
+  if (tuckExtraMm > 0) {
+    applyBottomTuckTabTaper(cutSegments, { x: bottomBackTuck.x, y: bottomBackTuck.y, width: bottomBackTuck.width, height: tuckExtraMm }, 3);
+  }
+  // ZJ: taper the top + bottom cut lines (L5 and L2) with full-length diagonals.
+  applySkewedFlapTapers(cutSegments, bottomSideLeft, 3);
 
   return {
     pageSize,
@@ -180,6 +202,113 @@ function applyTopTuckTabTaper(cutSegments, rectMm, taperMm) {
   cutSegments.sort(compareSegments);
 }
 
+function applyBottomTuckTabTaper(cutSegments, rectMm, taperMm) {
+  const taper = Math.max(0, Number(taperMm) || 0);
+  const x = rectMm.x;
+  const y = rectMm.y;
+  const w = rectMm.width;
+  const h = rectMm.height;
+  if (!(taper > 0) || !(h > 0) || w <= taper * 2) return;
+
+  const bottomY = y;
+  const baseY = y + h;
+
+  const bottomEdge = hSegment(x, x + w, bottomY);
+  if (!cutSegments.some(seg => sameSegment(seg, bottomEdge, 1e-6))) return;
+
+  const fullEdgeLeft = cutSegments.find(seg => seg.x1 === x && seg.x2 === x && seg.y1 <= bottomY && seg.y2 >= baseY);
+  const fullEdgeRight = cutSegments.find(seg => seg.x1 === x + w && seg.x2 === x + w && seg.y1 <= bottomY && seg.y2 >= baseY);
+  if (!fullEdgeLeft || !fullEdgeRight) return;
+
+  if (fullEdgeLeft) removeCutSegment(cutSegments, fullEdgeLeft);
+  if (fullEdgeRight) removeCutSegment(cutSegments, fullEdgeRight);
+  removeCutSegment(cutSegments, bottomEdge);
+
+  if (fullEdgeLeft && fullEdgeLeft.y2 > baseY) cutSegments.push(vSegment(x, baseY, fullEdgeLeft.y2));
+  if (fullEdgeRight && fullEdgeRight.y2 > baseY) cutSegments.push(vSegment(x + w, baseY, fullEdgeRight.y2));
+
+  cutSegments.push(diagSegment(x, baseY, x + taper, bottomY));
+  cutSegments.push(diagSegment(x + w, baseY, x + w - taper, bottomY));
+  cutSegments.push(hSegment(x + taper, x + w - taper, bottomY));
+  cutSegments.sort(compareSegments);
+}
+
+function applyBottomRightCornerChamfer(cutSegments, rectMm, chamferMm) {
+  const c = Math.max(0, Number(chamferMm) || 0);
+  const x = rectMm.x;
+  const y = rectMm.y;
+  const w = rectMm.width;
+  const h = rectMm.height;
+  if (!(c > 0) || w <= c || h <= c) return;
+
+  const xRight = x + w;
+  const yBottom = y;
+  const yTop = y + h;
+
+  const bottomEdge = hSegment(x, xRight, yBottom);
+  const rightEdge = vSegment(xRight, yBottom, yTop);
+  if (!cutSegments.some(seg => sameSegment(seg, bottomEdge, 1e-6))) return;
+  if (!cutSegments.some(seg => sameSegment(seg, rightEdge, 1e-6))) return;
+
+  removeCutSegment(cutSegments, bottomEdge);
+  removeCutSegment(cutSegments, rightEdge);
+
+  cutSegments.push(hSegment(x, xRight - c, yBottom));
+  cutSegments.push(vSegment(xRight, yBottom + c, yTop));
+  cutSegments.push(diagSegment(xRight - c, yBottom, xRight, yBottom + c));
+  cutSegments.sort(compareSegments);
+}
+
+function applyOuterEdgeCornerTapers({ cutSegments, foldSegments }, rectMm, taperMm, outerEdge = 'right') {
+  const c = Math.max(0, Number(taperMm) || 0);
+  if (!(c > 0)) return;
+  const x = rectMm.x;
+  const y = rectMm.y;
+  const w = rectMm.width;
+  const h = rectMm.height;
+  if (!(w > c) || !(h > c * 2)) return;
+
+  const xOuter = outerEdge === 'left' ? x : x + w;
+  const xInner = outerEdge === 'left' ? x + w : x;
+  const yBottom = y;
+  const yTop = y + h;
+  const xChamfer = xOuter + (outerEdge === 'left' ? c : -c);
+
+  const topEdge = hSegment(Math.min(xInner, xOuter), Math.max(xInner, xOuter), yTop);
+  const bottomEdge = hSegment(Math.min(xInner, xOuter), Math.max(xInner, xOuter), yBottom);
+  const outerVert = vSegment(xOuter, yBottom, yTop);
+
+  const topType = segmentsInclude(foldSegments, topEdge) ? 'fold' : segmentsInclude(cutSegments, topEdge) ? 'cut' : null;
+  const bottomType = segmentsInclude(cutSegments, bottomEdge) ? 'cut' : segmentsInclude(foldSegments, bottomEdge) ? 'fold' : null;
+  if (!topType || !bottomType) return;
+  if (!segmentsInclude(cutSegments, outerVert)) return;
+
+  removeSegment(cutSegments, outerVert);
+  if (topType === 'fold') removeSegment(foldSegments, topEdge);
+  else removeSegment(cutSegments, topEdge);
+  if (bottomType === 'fold') removeSegment(foldSegments, bottomEdge);
+  else removeSegment(cutSegments, bottomEdge);
+
+  const topShort = hSegment(Math.min(xInner, xChamfer), Math.max(xInner, xChamfer), yTop);
+  const bottomShort = hSegment(Math.min(xInner, xChamfer), Math.max(xInner, xChamfer), yBottom);
+  const vertShort = vSegment(xOuter, yBottom + c, yTop - c);
+
+  if (topType === 'fold') foldSegments.push(topShort);
+  else cutSegments.push(topShort);
+
+  if (bottomType === 'fold') foldSegments.push(bottomShort);
+  else cutSegments.push(bottomShort);
+
+  cutSegments.push(vertShort);
+
+  // Diagonal cut corners.
+  cutSegments.push(diagSegment(xChamfer, yBottom, xOuter, yBottom + c));
+  cutSegments.push(diagSegment(xOuter, yTop - c, xChamfer, yTop));
+
+  cutSegments.sort(compareSegments);
+  foldSegments.sort(compareSegments);
+}
+
 function applyGlueFlapCornerChamfer(cutSegments, rectMm, chamferMm) {
   const c = Math.max(0, Number(chamferMm) || 0);
   const x = rectMm.x;
@@ -237,6 +366,51 @@ function removeCutSegment(cutSegments, target) {
   if (idx === -1) return false;
   cutSegments.splice(idx, 1);
   return true;
+}
+
+function removeSegment(segments, target, epsilon = 1e-6) {
+  const idx = segments.findIndex(seg => sameSegment(seg, target, epsilon));
+  if (idx === -1) return false;
+  segments.splice(idx, 1);
+  return true;
+}
+
+function segmentsInclude(segments, target, epsilon = 1e-6) {
+  return segments.some(seg => sameSegment(seg, target, epsilon));
+}
+
+function applySkewedFlapTapers(cutSegments, rectMm, taperMm) {
+  const t = Math.max(0, Number(taperMm) || 0);
+  if (!(t > 0)) return;
+  const x = rectMm.x;
+  const y = rectMm.y;
+  const w = rectMm.width;
+  const h = rectMm.height;
+  if (!(w > 0) || !(h > t * 2)) return;
+
+  const x0 = x;
+  const x1 = x + w;
+  const y0 = y;
+  const y1 = y + h;
+
+  // Replace the top and bottom cut edges with full-width diagonals, and chamfer the outer corners.
+  const topEdge = hSegment(x0, x1, y1);
+  const bottomEdge = hSegment(x0, x1, y0);
+  const outerEdge = vSegment(x1, y0, y1);
+
+  if (!segmentsInclude(cutSegments, topEdge)) return;
+  if (!segmentsInclude(cutSegments, bottomEdge)) return;
+  if (!segmentsInclude(cutSegments, outerEdge)) return;
+
+  removeSegment(cutSegments, topEdge);
+  removeSegment(cutSegments, bottomEdge);
+  removeSegment(cutSegments, outerEdge);
+
+  cutSegments.push(diagSegment(x0, y1, x1, y1 - t));
+  cutSegments.push(diagSegment(x0, y0, x1, y0 + t));
+  cutSegments.push(vSegment(x1, y0 + t, y1 - t));
+
+  cutSegments.sort(compareSegments);
 }
 
 function vSegment(x, y1, y2) {

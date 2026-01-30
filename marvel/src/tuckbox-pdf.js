@@ -38,6 +38,8 @@ const PDF_OPS = {
 async function buildTuckBoxPdf(options) {
   const layout = computeTuckBoxLayout(options);
   const duplex = options.duplex !== false;
+  const printMode = Boolean(options.print);
+  const showLabels = !printMode;
 
   const pdfDoc = await PDFDocument.create();
   const { fonts, warnings: fontWarnings } = await loadMarvelChampionsFonts(pdfDoc, {
@@ -96,7 +98,7 @@ async function buildTuckBoxPdf(options) {
   const backPath = resolveOptionalPath(options.backPath || options.backArt || options.back, defaultCardBackPath());
   if (backPath) {
     const embeddedBack = await embedImage(pdfDoc, backPath, imageCache);
-    drawBackArt(pageFront, embeddedBack, layout.body.back, palette, { duplex });
+    drawBackArt(pageFront, embeddedBack, layout.body.back, palette, { duplex, layout });
   }
 
   const heroName = String(options.heroName || options.hero || '').trim();
@@ -112,19 +114,21 @@ async function buildTuckBoxPdf(options) {
 
   drawFrontText(pageFront, fonts, layout.body.front, { heroName, miscText }, palette);
   drawTopText(pageFront, fonts, layout.topFace, { heroName, miscText }, palette);
-  drawFrontGlueMarks(pageFront, { guideFont }, layout, palette, { duplex });
 
   if (pageBack) {
     drawGuides(pageBack, layout, palette);
-    drawLineLabels(pageBack, { guideFont }, layout, palette);
-    drawZoneLabels(pageBack, { guideFont }, layout, palette);
-    drawLegend(pageBack, { guideFont }, layout, palette, { duplex: true });
+    if (showLabels) {
+      drawLineLabels(pageBack, { guideFont }, layout, palette);
+      drawZoneLabels(pageBack, { guideFont }, layout, palette);
+    }
+    drawLegend(pageBack, { guideFont }, layout, palette, { duplex: true, showLabels });
   } else {
-    drawGlueLabel(pageFront, fonts, layout.body.glue, palette);
     drawGuides(pageFront, layout, palette);
-    drawLineLabels(pageFront, { guideFont }, layout, palette);
-    drawZoneLabels(pageFront, { guideFont }, layout, palette);
-    drawLegend(pageFront, { guideFont }, layout, palette, { duplex: false });
+    if (showLabels) {
+      drawLineLabels(pageFront, { guideFont }, layout, palette);
+      drawZoneLabels(pageFront, { guideFont }, layout, palette);
+    }
+    drawLegend(pageFront, { guideFont }, layout, palette, { duplex: false, showLabels });
   }
 
   const pdfBytes = await pdfDoc.save({ useObjectStreams: false });
@@ -231,52 +235,26 @@ async function buildTuckBoxTopSampleSheetPdf(options) {
   };
 }
 
-function drawFrontGlueMarks(page, { guideFont }, layout, palette, { duplex }) {
-  if (!duplex) return;
-  const zones = buildZoneLabels(layout);
-  for (const zone of zones) {
-    const wantFrontGlue = (zone.isGlue && zone.glueFace === 'front') || zone.label === 'ZA';
-    if (!wantFrontGlue) continue;
-    drawFrontGlueMark(page, guideFont, zone.rectMm, palette);
-  }
-}
-
-function drawFrontGlueMark(page, guideFont, rectMm, palette) {
-  const safe = insetRectMm(rectMm, 1.5);
-  if (safe.width <= 0 || safe.height <= 0) return;
-  const label = 'GLUE';
-  const sizeMm = fitTextSizeMm(guideFont, label, safe.width, Math.min(8, safe.height), 3);
-  drawCenteredTextOutlineMm(page, guideFont, label, safe, {
-    sizePt: mmToPt(sizeMm),
-    color: rgb(1, 1, 1),
-    outlineColor: rgb(0, 0, 0),
-    outlineOffsetMm: 0.35,
-  });
-}
-
 function drawBasePanels(page, layout, palette) {
   for (const r of layout.rects) {
     const isGlue = r.id === 'glue';
     const isSide = r.id === 'side-left' || r.id === 'side-right';
     const isBottom = r.id.startsWith('bottom-');
-    const fill = isGlue ? rgb(0.96, 0.96, 0.96) : isSide || isBottom ? palette.marvelBlue : palette.panel;
-    const opacity = isGlue ? 1 : 1;
-    drawRectMm(page, r, { color: fill, opacity });
-  }
+    const isTopFlap = r.id === 'top-front-tuck' || r.id === 'top-face-tab-left' || r.id === 'top-face-tab-right';
+    const isFrontBack = r.id === 'front' || r.id === 'back';
 
-  const accentBandMm = 6;
-  for (const side of [layout.body.sideLeft, layout.body.sideRight]) {
-    const band = {
-      x: side.x,
-      y: side.y + side.height - accentBandMm,
-      width: side.width,
-      height: accentBandMm,
-    };
-    drawRectMm(page, band, { color: palette.accent, opacity: 1 });
-  }
+    if (isFrontBack) {
+      drawRectMm(page, r, { color: palette.marvelBlue, opacity: 1 });
+      const inner =
+        r.id === 'back'
+          ? insetRectEdgesMm(r, { left: FRONT_BACK_BORDER_MM, right: FRONT_BACK_BORDER_MM, top: FRONT_BACK_BORDER_MM, bottom: backBottomBorderMm(layout) })
+          : insetRectMm(r, FRONT_BACK_BORDER_MM);
+      if (inner.width > 0 && inner.height > 0) drawRectMm(page, inner, { color: palette.panel, opacity: 1 });
+      continue;
+    }
 
-  for (const base of [layout.body.back, layout.body.sideLeft, layout.body.sideRight]) {
-    drawDiagonalStripes(page, base, palette, { densityMm: 10, alpha: 0.06 });
+    const fill = isGlue ? rgb(0.96, 0.96, 0.96) : isSide || isBottom || isTopFlap ? palette.marvelBlue : palette.panel;
+    drawRectMm(page, r, { color: fill, opacity: 1 });
   }
 }
 
@@ -288,39 +266,49 @@ function drawBackSideBase(page, layout, palette) {
   }
 }
 
+const FRONT_BACK_BORDER_MM = 8;
+
+function backBottomBorderMm(layout) {
+  const tuckExtraMm = Number(layout?.dimensionsMm?.tuckExtraMm) || 0;
+  // Ensure the bottom border exceeds the ZO flap height (so the overlap stays inside the blue frame).
+  return Math.max(FRONT_BACK_BORDER_MM, tuckExtraMm + 2);
+}
+
 function drawFrontArt(page, embeddedImage, rectMm, palette, { offsetsMm } = {}) {
-  const paddingMm = 0;
-  const target = insetRectMm(rectMm, paddingMm);
+  const target = insetRectMm(rectMm, FRONT_BACK_BORDER_MM);
   drawImageCoverMm(page, embeddedImage, target, { clipRadiusMm: 0, offsetsMm });
 
   // Subtle vignette for text legibility.
-  const overlayMm = insetRectMm(rectMm, 0);
+  const overlayMm = insetRectMm(target, 0);
   drawRectMm(page, overlayMm, { color: palette.background, opacity: 0.12 });
 }
 
 function drawTopArt(page, embeddedImage, rectMm, palette, { offsetsMm } = {}) {
   drawImageCoverMm(page, embeddedImage, rectMm, { clipRadiusMm: 0, opacity: 1, offsetsMm });
-  drawRectMm(page, rectMm, { borderColor: palette.accent, borderWidthPt: 1.2 });
 }
 
-function drawBackArt(page, embeddedImage, rectMm, palette, { duplex } = {}) {
-  drawImageCoverMm(page, embeddedImage, rectMm, { clipRadiusMm: 0, opacity: 1 });
+function drawBackArt(page, embeddedImage, rectMm, palette, { duplex, layout } = {}) {
+  const target = insetRectEdgesMm(rectMm, { left: FRONT_BACK_BORDER_MM, right: FRONT_BACK_BORDER_MM, top: FRONT_BACK_BORDER_MM, bottom: backBottomBorderMm(layout) });
+  drawImageCoverMm(page, embeddedImage, target, { clipRadiusMm: 0, opacity: 1 });
   if (!duplex) drawRectMm(page, rectMm, { borderColor: palette.cut, borderWidthPt: 0.8 });
 }
 
 function drawFrontLogoImage(page, embeddedImage, frontMm) {
   const scale = 1.5;
-  const maxWidthMm = Math.min(26 * scale, frontMm.width * 0.38 * scale);
+  const safeFront = insetRectMm(frontMm, FRONT_BACK_BORDER_MM);
+  const maxWidthMm = Math.min(26 * scale, safeFront.width * 0.38 * scale);
   const maxHeightMm = 12 * scale;
-  const x = frontMm.x + (frontMm.width - maxWidthMm) / 2;
-  const y = frontMm.y + frontMm.height - maxHeightMm - 3;
+  const x = safeFront.x + (safeFront.width - maxWidthMm) / 2;
+  const y = safeFront.y + safeFront.height - maxHeightMm - 3;
   drawImageContainMm(page, embeddedImage, { x, y, width: maxWidthMm, height: maxHeightMm }, { opacity: 0.98 });
 }
 
 function drawFrontText(page, fonts, frontMm, { heroName, miscText }, palette) {
-  const bottomBandMm = Math.max(22, frontMm.height * 0.28);
-  const liftMm = 6;
-  const band = { x: frontMm.x, y: frontMm.y + liftMm, width: frontMm.width, height: bottomBandMm };
+  const safeFront = insetRectMm(frontMm, FRONT_BACK_BORDER_MM);
+  const bottomBandMm = Math.max(22, safeFront.height * 0.28);
+  const liftMm = 10;
+  const bandHeightMm = Math.max(0, Math.min(bottomBandMm, safeFront.height - liftMm));
+  const band = { x: safeFront.x, y: safeFront.y + liftMm, width: safeFront.width, height: bandHeightMm };
 
   const safe = insetRectMm(band, 3);
   const title = heroName || 'Hero';
@@ -886,7 +874,7 @@ function drawZoneLabel(page, guideFont, { rectMm, label, isGlue, glueFace }, pal
   });
 }
 
-function drawLegend(page, { guideFont }, layout, palette, { duplex } = {}) {
+function drawLegend(page, { guideFont }, layout, palette, { duplex, showLabels = true } = {}) {
   const paddingMm = 6;
   const legend = {
     x: paddingMm,
@@ -914,7 +902,8 @@ function drawLegend(page, { guideFont }, layout, palette, { duplex } = {}) {
   drawTextMm(page, guideFont, 'Fold', { x: legend.x + 20, y: foldY - 1 }, { sizeMm: 2.8, color: palette.cut });
 
   if (duplex) {
-    drawTextMm(page, guideFont, 'Back side: cut/fold + ZA/L# labels', { x: legend.x + 3, y: legend.y + 1.2 }, { sizeMm: 2.6, color: palette.cut });
+    const note = showLabels ? 'Back side: cut/fold + ZA/L# labels' : 'Back side: cut/fold guides only';
+    drawTextMm(page, guideFont, note, { x: legend.x + 3, y: legend.y + 1.2 }, { sizeMm: 2.6, color: palette.cut });
   }
 }
 
@@ -1006,6 +995,19 @@ function insetRectMm(rectMm, insetMm) {
     y: rectMm.y + inset,
     width: Math.max(0, rectMm.width - inset * 2),
     height: Math.max(0, rectMm.height - inset * 2),
+  };
+}
+
+function insetRectEdgesMm(rectMm, { left = 0, right = 0, top = 0, bottom = 0 } = {}) {
+  const l = Number(left) || 0;
+  const r = Number(right) || 0;
+  const t = Number(top) || 0;
+  const b = Number(bottom) || 0;
+  return {
+    x: rectMm.x + l,
+    y: rectMm.y + b,
+    width: Math.max(0, rectMm.width - l - r),
+    height: Math.max(0, rectMm.height - t - b),
   };
 }
 
