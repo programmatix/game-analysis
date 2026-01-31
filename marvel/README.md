@@ -60,6 +60,16 @@ Useful flags:
 - `--fonts-dir` and `--font-config` load the official Marvel Champions fonts when you have them locally (otherwise it falls back to Helvetica).
 - `--orientation auto|portrait|landscape` selects A4 orientation; `auto` picks the first that fits.
 
+### Sticker samples
+
+Generate a 1-page sheet of deck-box sticker designs (10 slots; only the first is currently rendered):
+
+```bash
+npx marvel-sticker-samples --output sticker-samples.pdf
+```
+
+Sample #1 tweaks: `--sample-1-logo`, `--sample-1-art`, `--sample-1-logo-offset-x-mm/--sample-1-logo-offset-y-mm`, `--sample-1-art-offset-x-mm/--sample-1-art-offset-y-mm`, `--sample-1-yellow`, `--sample-1-gradient-width-mm`.
+
 ### Font sheet
 
 Generate a one-page PDF showing samples for all configured Marvel Champions fonts:

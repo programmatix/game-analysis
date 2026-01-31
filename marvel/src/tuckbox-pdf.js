@@ -267,6 +267,8 @@ function drawBackSideBase(page, layout, palette) {
 }
 
 const FRONT_BACK_BORDER_MM = 8;
+const FRONT_TEXT_LIFT_MM = 24;
+const FRONT_LOGO_SCALE = 1.5;
 
 function backBottomBorderMm(layout) {
   const tuckExtraMm = Number(layout?.dimensionsMm?.tuckExtraMm) || 0;
@@ -294,19 +296,43 @@ function drawBackArt(page, embeddedImage, rectMm, palette, { duplex, layout } = 
 }
 
 function drawFrontLogoImage(page, embeddedImage, frontMm) {
-  const scale = 1.5;
+  const scale = FRONT_LOGO_SCALE;
   const safeFront = insetRectMm(frontMm, FRONT_BACK_BORDER_MM);
-  const maxWidthMm = Math.min(26 * scale, safeFront.width * 0.38 * scale);
-  const maxHeightMm = 12 * scale;
-  const x = safeFront.x + (safeFront.width - maxWidthMm) / 2;
-  const y = safeFront.y + safeFront.height - maxHeightMm - 3;
+
+  // Place the logo at the bottom to avoid clashing with busy artwork.
+  // Keep it under the front text band when possible.
+  const bottomBandMm = Math.max(22, safeFront.height * 0.28);
+  const liftMm = FRONT_TEXT_LIFT_MM;
+  const bandHeightMm = Math.max(0, Math.min(bottomBandMm, safeFront.height - liftMm));
+  const band = { x: safeFront.x, y: safeFront.y + liftMm, width: safeFront.width, height: bandHeightMm };
+
+  const paddingMm = 1.2;
+  const bottomAreaMm = {
+    x: safeFront.x,
+    y: safeFront.y + paddingMm,
+    width: safeFront.width,
+    height: Math.max(0, band.y - safeFront.y - paddingMm * 2),
+  };
+
+  // If the bottom area is too small (nonstandard layouts), fall back to the prior top placement.
+  const targetAreaMm = bottomAreaMm.height >= 6 ? bottomAreaMm : safeFront;
+
+  const maxWidthMm = Math.min(26 * scale, targetAreaMm.width * 0.5 * scale);
+  const maxHeightMm = Math.min(12 * scale, Math.max(0, targetAreaMm.height));
+  if (maxWidthMm <= 0 || maxHeightMm <= 0) return;
+
+  const x = targetAreaMm.x + (targetAreaMm.width - maxWidthMm) / 2;
+  const y =
+    targetAreaMm === safeFront
+      ? safeFront.y + safeFront.height - maxHeightMm - 3
+      : targetAreaMm.y + (targetAreaMm.height - maxHeightMm) / 2;
   drawImageContainMm(page, embeddedImage, { x, y, width: maxWidthMm, height: maxHeightMm }, { opacity: 0.98 });
 }
 
 function drawFrontText(page, fonts, frontMm, { heroName, miscText }, palette) {
   const safeFront = insetRectMm(frontMm, FRONT_BACK_BORDER_MM);
   const bottomBandMm = Math.max(22, safeFront.height * 0.28);
-  const liftMm = 10;
+  const liftMm = FRONT_TEXT_LIFT_MM;
   const bandHeightMm = Math.max(0, Math.min(bottomBandMm, safeFront.height - liftMm));
   const band = { x: safeFront.x, y: safeFront.y + liftMm, width: safeFront.width, height: bandHeightMm };
 
@@ -329,7 +355,12 @@ function drawFrontText(page, fonts, frontMm, { heroName, miscText }, palette) {
 
   if (!miscText.lines.length) return;
   const miscFontMm = Math.min(5.2, titleSizeMm * 0.45);
-  const miscBox = { x: safe.x, y: safe.y + 1, width: safe.width, height: safe.height - titleHeightMm - 2 };
+  // Nudge the subtitle down a bit to reduce overlap with the title.
+  const miscShiftDownMm = 50;
+  const miscBoxY = Math.max(band.y - 1, safe.y + 0.8 - miscShiftDownMm);
+  const miscBoxTopY = safe.y + safe.height - titleHeightMm - 2;
+  const miscBoxHeightMm = Math.max(0, miscBoxTopY - miscBoxY);
+  const miscBox = { x: safe.x, y: miscBoxY, width: safe.width, height: miscBoxHeightMm };
   drawWrappedTextShadowMm(page, fonts.body, miscText.lines.join('\n'), miscBox, {
     sizePt: mmToPt(miscFontMm),
     color: rgb(0.95, 0.95, 0.95),
@@ -337,61 +368,46 @@ function drawFrontText(page, fonts, frontMm, { heroName, miscText }, palette) {
     shadowOffsetMm: { x: 0.35, y: -0.35 },
     align: 'center',
     maxLines: 3,
+    valign: 'bottom',
   });
   drawWrappedTextMm(page, fonts.body, miscText.lines.join('\n'), miscBox, {
     sizePt: mmToPt(miscFontMm),
     color: rgb(0.95, 0.95, 0.95),
     align: 'center',
     maxLines: 3,
+    valign: 'bottom',
   });
 }
 
 function drawTopText(page, fonts, topFaceMm, { heroName, miscText }, palette) {
-  const layout = computeTopTextLayout(fonts, topFaceMm, { heroName, miscText });
-  drawCenteredTextOutlineMm(page, fonts.title, layout.title, layout.titleBox, {
-    sizePt: mmToPt(layout.titleSizeMm),
+  const inset = insetRectMm(topFaceMm, 2);
+  const title = heroName || 'Hero';
+  const titleSizeMm = fitTextSizeMm(fonts.title, title, inset.width, 8, 3.5);
+  // Top should be just the hero name, centered.
+  drawCenteredTextOutlineMm(page, fonts.title, title, inset, {
+    sizePt: mmToPt(titleSizeMm),
     color: palette.white,
     outlineColor: rgb(0, 0, 0),
     outlineOffsetMm: 0.35,
-    yOffsetMm: -0.2,
-  });
-
-  if (!layout.miscText) return;
-  drawWrappedTextOutlineMm(page, fonts.body, layout.miscText, layout.miscBox, {
-    sizePt: mmToPt(layout.miscSizeMm),
-    color: rgb(0.92, 0.92, 0.92),
-    outlineColor: rgb(0, 0, 0),
-    outlineOffsetMm: 0.3,
-    align: 'center',
-    maxLines: 2,
-    valign: 'top',
+    yOffsetMm: 0,
   });
 }
 
 function computeTopTextLayout(fonts, topFaceMm, { heroName, miscText }) {
   const inset = insetRectMm(topFaceMm, 2);
-  const yShiftDownMm = 1.2;
-
   const title = heroName || 'Hero';
   const titleSizeMm = fitTextSizeMm(fonts.title, title, inset.width, 8, 3.5);
-  const titleHeightMm = titleSizeMm * 1.12;
-  const titleBox = { x: inset.x, y: inset.y + inset.height - titleHeightMm - yShiftDownMm, width: inset.width, height: titleHeightMm };
-
-  const miscTextNormalized = miscText?.lines?.length ? miscText.lines.join('\n') : '';
-  const miscSizeMm = miscTextNormalized ? Math.min(3.6, titleSizeMm * 0.55) : 0;
-  const miscBox = miscTextNormalized
-    ? { x: inset.x, y: inset.y - yShiftDownMm, width: inset.width, height: inset.height - titleHeightMm + 0.5 }
-    : null;
+  // Legacy helper for sample plates; top no longer renders misc text.
+  const titleBox = inset;
 
   return {
     inset,
-    yShiftDownMm,
     title,
     titleSizeMm,
     titleBox,
-    miscText: miscTextNormalized || null,
-    miscSizeMm,
-    miscBox,
+    miscText: null,
+    miscSizeMm: 0,
+    miscBox: null,
   };
 }
 
