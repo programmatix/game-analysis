@@ -81,6 +81,7 @@ test('buildTuckBoxTopSampleSheetPdf: generates a valid 1-page PDF', async () => 
     innerDepthMm: 25,
     accent: '#d4252a',
     artPath,
+    logoScale: 0.75,
     pageSize: 'a4',
     orientation: 'auto',
     columns: 4,

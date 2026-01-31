@@ -21,6 +21,7 @@ async function main() {
     .option('--top-art-offset-x-mm <number>', 'Top art horizontal offset in millimetres', '0')
     .option('--top-art-offset-y-mm <number>', 'Top art vertical offset in millimetres', '0')
     .option('--logo <file>', 'Marvel Champions logo image (PNG/JPG). Defaults to assets/logo.png', '')
+    .option('--logo-scale <number>', 'Logo scale factor (multiplies default size)', '1')
     .option('--no-logo', 'Disable the logo entirely', false)
     .option('--fonts-dir <dir>', 'Directory containing Marvel Champions fonts (TTF/OTF)', path.join(__dirname, '..', 'assets', 'fonts'))
     .option('--font-config <file>', 'JSON mapping font keys to file paths (optional)', '')
@@ -46,6 +47,7 @@ async function main() {
     innerDepthMm: parseNumber('--inner-depth-mm', opts.innerDepthMm, errors, { min: 0.1 }),
     topArtOffsetXMm: parseNumber('--top-art-offset-x-mm', opts.topArtOffsetXMm, errors, { min: -1000 }),
     topArtOffsetYMm: parseNumber('--top-art-offset-y-mm', opts.topArtOffsetYMm, errors, { min: -1000 }),
+    logoScale: parseNumber('--logo-scale', opts.logoScale, errors, { min: 0.01 }),
     sheetMarginMm: parseNumber('--sheet-margin-mm', opts.sheetMarginMm, errors, { min: 0 }),
     gutterMm: parseNumber('--gutter-mm', opts.gutterMm, errors, { min: 0 }),
     columns: parseIntNumber('--columns', opts.columns, errors, { min: 1, max: 10 }),
@@ -82,6 +84,7 @@ async function main() {
     accent,
     artPath: opts.art,
     logoPath: opts.logo,
+    logoScale: numbers.logoScale,
     noLogo: Boolean(opts.noLogo),
     fontsDir: opts.fontsDir,
     fontOverrides,

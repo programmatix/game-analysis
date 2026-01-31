@@ -108,7 +108,7 @@ async function buildTuckBoxPdf(options) {
     const logoPath = resolveOptionalPath(options.logoPath || options.logo, defaultLogoPath());
     if (logoPath) {
       const embeddedLogo = await embedImage(pdfDoc, logoPath, imageCache);
-      drawFrontLogoImage(pageFront, embeddedLogo, layout.body.front);
+      drawFrontLogoImage(pageFront, embeddedLogo, layout.body.front, { scaleFactor: options.logoScale });
     }
   }
 
@@ -216,6 +216,7 @@ async function buildTuckBoxTopSampleSheetPdf(options) {
       baseTopFaceMm,
       topArtOffsetXMm: Number(options.topArtOffsetXMm) || 0,
       topArtOffsetYMm: Number(options.topArtOffsetYMm) || 0,
+      logoScale: options.logoScale,
       variantIndex: index,
     });
   }
@@ -295,8 +296,10 @@ function drawBackArt(page, embeddedImage, rectMm, palette, { duplex, layout } = 
   if (!duplex) drawRectMm(page, rectMm, { borderColor: palette.cut, borderWidthPt: 0.8 });
 }
 
-function drawFrontLogoImage(page, embeddedImage, frontMm) {
-  const scale = FRONT_LOGO_SCALE;
+function drawFrontLogoImage(page, embeddedImage, frontMm, { scaleFactor } = {}) {
+  const rawScale = Number(scaleFactor);
+  const userScale = Number.isFinite(rawScale) && rawScale > 0 ? rawScale : 1;
+  const scale = FRONT_LOGO_SCALE * userScale;
   const safeFront = insetRectMm(frontMm, FRONT_BACK_BORDER_MM);
 
   // Place the logo at the bottom to avoid clashing with busy artwork.
@@ -1146,6 +1149,7 @@ function drawTopSampleVariant(page, { fonts, guideFont }, rectMm, { heroName, mi
   const variantIndex = Number(assets.variantIndex) || 0;
   const embeddedArt = assets.embeddedArt;
   const embeddedLogo = assets.embeddedLogo;
+  const logoScale = assets.logoScale;
 
   const baseTopWidthMm = Number(assets.baseTopFaceMm?.width) || rectMm.width;
   const scale = rectMm.width / baseTopWidthMm;
@@ -1239,7 +1243,7 @@ function drawTopSampleVariant(page, { fonts, guideFont }, rectMm, { heroName, mi
       withClipRectMm(page, insetRectMm(rectMm, 0.8), () => {
         drawTechLinesMm(page, rectMm, { color: light, alpha: 0.12, accent: palette.accent });
       });
-      if (embeddedLogo) drawCornerLogoMm(page, embeddedLogo, rectMm, { corner: 'top-left', opacity: 0.9 });
+      if (embeddedLogo) drawCornerLogoMm(page, embeddedLogo, rectMm, { corner: 'top-left', opacity: 0.9, scaleFactor: logoScale });
       drawTextPlateMm(page, textLayout, { style: 'hard', accent: palette.accent });
       break;
     }
@@ -1274,7 +1278,7 @@ function drawTopSampleVariant(page, { fonts, guideFont }, rectMm, { heroName, mi
           { color: light, thicknessPt: 0.7, opacity: 0.5 },
         );
       });
-      if (embeddedLogo) drawCornerLogoMm(page, embeddedLogo, rectMm, { corner: 'bottom-right', opacity: 0.85 });
+      if (embeddedLogo) drawCornerLogoMm(page, embeddedLogo, rectMm, { corner: 'bottom-right', opacity: 0.85, scaleFactor: logoScale });
       drawTextPlateMm(page, textLayout, { style: 'soft', accent: palette.accent });
       break;
     }
@@ -1309,7 +1313,9 @@ function drawTopSampleVariant(page, { fonts, guideFont }, rectMm, { heroName, mi
   }
 
   drawTopText(page, fonts, rectMm, { heroName, miscText }, palette);
-  if (idx !== 8 && embeddedLogo && idx % 4 === 1) drawCornerLogoMm(page, embeddedLogo, rectMm, { corner: 'top-right', opacity: 0.75 });
+  if (idx !== 8 && embeddedLogo && idx % 4 === 1) {
+    drawCornerLogoMm(page, embeddedLogo, rectMm, { corner: 'top-right', opacity: 0.75, scaleFactor: logoScale });
+  }
 
   if (idx !== 0) {
     const sample = TOP_SAMPLE_VARIANTS[idx]?.id || String(idx);
@@ -1610,10 +1616,12 @@ function drawGlowCornersMm(page, rectMm, { color, alpha }) {
   }
 }
 
-function drawCornerLogoMm(page, embeddedLogo, rectMm, { corner, opacity }) {
-  const maxH = Math.min(5.8, rectMm.height * 0.34);
-  const maxW = Math.min(18, rectMm.width * 0.35);
-  const pad = 1.2;
+function drawCornerLogoMm(page, embeddedLogo, rectMm, { corner, opacity, scaleFactor } = {}) {
+  const rawScale = Number(scaleFactor);
+  const scale = Number.isFinite(rawScale) && rawScale > 0 ? rawScale : 1;
+  const maxH = Math.min(5.8 * scale, rectMm.height * 0.34 * scale);
+  const maxW = Math.min(18 * scale, rectMm.width * 0.35 * scale);
+  const pad = 1.2 * scale;
   const box = { x: rectMm.x + pad, y: rectMm.y + rectMm.height - maxH - pad, width: maxW, height: maxH };
   const cornerKey = String(corner || '').toLowerCase();
   if (cornerKey === 'top-right') {

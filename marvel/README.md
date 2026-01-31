@@ -52,6 +52,7 @@ Useful flags:
 - `--front-art-offset-x-mm/--front-art-offset-y-mm` adjusts front art cropping.
 - `--top-art-offset-x-mm/--top-art-offset-y-mm` adjusts top art cropping.
 - `--logo` sets the Marvel Champions logo image (default: `assets/logo.png`); use `--no-logo` to disable.
+- `--logo-scale` scales the logo size (multiplies the default).
 - `--back` sets the back-panel image (default: `assets/cardback.png`).
 - `--aspect justice|leadership|aggression|protection|basic|pool` sets a preset accent color (overrides `--accent`).
 - `--print` hides the back-side zone/line labels (keeps cut/fold guides).

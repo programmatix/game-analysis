@@ -26,6 +26,7 @@ async function main() {
     .option('--top-art-offset-x-mm <number>', 'Top art horizontal offset in millimetres', '0')
     .option('--top-art-offset-y-mm <number>', 'Top art vertical offset in millimetres', '0')
     .option('--logo <file>', 'Marvel Champions logo image (PNG/JPG). Defaults to assets/logo.png', '')
+    .option('--logo-scale <number>', 'Logo scale factor (multiplies default size)', '1')
     .option('--no-logo', 'Disable the logo entirely', false)
     .option('--back <file>', 'Back panel image (PNG/JPG). Defaults to assets/cardback.png', '')
     .option('--no-duplex', 'Generate a 1-page single-sided template (cut/fold marks on front)')
@@ -55,6 +56,7 @@ async function main() {
     frontArtOffsetYMm: parseNumber('--front-art-offset-y-mm', opts.frontArtOffsetYMm, errors, { min: -1000 }),
     topArtOffsetXMm: parseNumber('--top-art-offset-x-mm', opts.topArtOffsetXMm, errors, { min: -1000 }),
     topArtOffsetYMm: parseNumber('--top-art-offset-y-mm', opts.topArtOffsetYMm, errors, { min: -1000 }),
+    logoScale: parseNumber('--logo-scale', opts.logoScale, errors, { min: 0.01 }),
   };
 
   const orientation = String(opts.orientation || 'auto').trim().toLowerCase();
@@ -82,6 +84,7 @@ async function main() {
     accent,
     artPath: opts.art,
     logoPath: opts.logo,
+    logoScale: numbers.logoScale,
     noLogo: Boolean(opts.noLogo),
     backPath: opts.back,
     duplex: Boolean(opts.duplex),
