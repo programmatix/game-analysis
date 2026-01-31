@@ -69,7 +69,37 @@ Generate a 1-page sheet of deck-box sticker designs (10 slots; only the first is
 npx marvel-sticker-samples --output sticker-samples.pdf
 ```
 
-Sample #1 tweaks: `--sample-1-logo`, `--sample-1-art`, `--sample-1-logo-offset-x-mm/--sample-1-logo-offset-y-mm`, `--sample-1-art-offset-x-mm/--sample-1-art-offset-y-mm`, `--sample-1-yellow`, `--sample-1-gradient-width-mm`.
+Sample #1 tweaks: `--sample-1-logo`, `--sample-1-art`, `--sample-1-logo-offset-x-mm/--sample-1-logo-offset-y-mm`, `--sample-1-art-offset-x-mm/--sample-1-art-offset-y-mm`, `--sample-1-gradient` (or legacy `--sample-1-yellow`), `--sample-1-gradient-width-mm`.
+
+Emit a starter YAML config (matching `marvel-sticker-sheet`) to stdout:
+
+```bash
+npx marvel-sticker-samples --format yaml --yaml-sample 1 > stickers.yaml
+```
+
+### Sticker sheet (YAML)
+
+Generate a starter YAML to stdout, then render it to a PDF:
+
+```bash
+npx marvel-sticker-sheet-template > stickers.yaml
+npx marvel-sticker-sheet --input stickers.yaml --output stickers.pdf
+```
+
+Use `--debug` to draw red alignment guides using the YAML `debug.leftMm`, `debug.rightFromRightMm`, and `debug.centerHorizontal`.
+
+Config notes:
+
+- `defaults.gradient` (and `stickers[].gradient`) is the fade color (renamed from `yellow`; legacy `yellow` is still accepted).
+- `stickers[].artScale` controls art zoom (1 = normal cover; >1 zooms in; <1 zooms out).
+
+### Sticker sheet UI
+
+Interactive editor for sticker-sheet YAML (drag art/logo, zoom art, pick gradient color, copy YAML to clipboard):
+
+```bash
+npx marvel-sticker-sheet-ui --yaml stickers.yaml
+```
 
 ### Font sheet
 

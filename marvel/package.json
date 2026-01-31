@@ -13,16 +13,32 @@
     "marvel-tuckbox": "src/tuckbox-cli.js",
     "marvel-tuckbox-samples": "src/tuckbox-samples-cli.js",
     "marvel-sticker-samples": "src/sticker-samples-cli.js",
+    "marvel-sticker-sheet-template": "src/sticker-sheet-template-cli.js",
+    "marvel-sticker-sheet": "src/sticker-sheet-cli.js",
+    "marvel-sticker-sheet-ui": "src/sticker-sheet-ui-cli.js",
     "marvel-font-sheet": "src/font-sheet-cli.js",
     "marvel-fonts-download": "src/fonts-download-cli.js"
   },
   "type": "commonjs",
   "scripts": {
+    "sticker-sheet-ui": "node src/sticker-sheet-ui-cli.js",
+    "sticker-sheet-ui:build": "vite build sticker-sheet-ui --config sticker-sheet-ui/vite.config.js",
     "test": "node --test \"src/*.test.js\""
   },
   "dependencies": {
     "@pdf-lib/fontkit": "^1.1.1",
     "commander": "^14.0.2",
-    "pdf-lib": "^1.17.1"
+    "pdf-lib": "^1.17.1",
+    "yaml": "^2.8.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^5.0.2",
+    "konva": "^9.3.22",
+    "open": "^10.2.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-konva": "^18.2.10",
+    "use-image": "^1.1.1",
+    "vite": "^6.0.11"
   }
 }

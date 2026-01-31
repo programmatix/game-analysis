@@ -22,7 +22,7 @@ test('buildStickerSampleSheetPdf builds a 10-slot sheet and returns PDF bytes', 
     cornerRadiusMm: 2,
     sample1Logo: logo,
     sample1Art: art,
-    sample1Yellow: '#f7d117',
+    sample1Gradient: '#f7d117',
     sample1GradientWidthMm: 34,
   });
 
@@ -35,4 +35,3 @@ test('buildStickerSampleSheetPdf builds a 10-slot sheet and returns PDF bytes', 
   assert.equal(sheet.stickerWidthMm, 70);
   assert.equal(sheet.stickerHeightMm, 25);
 });
-

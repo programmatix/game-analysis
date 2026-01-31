@@ -2,7 +2,9 @@
 const fs = require('fs');
 const path = require('path');
 const { Command } = require('commander');
+const YAML = require('yaml');
 const { buildStickerSampleSheetPdf } = require('./sticker-samples-pdf');
+const { buildStickerSheetYamlConfig } = require('./sticker-sheet-yaml');
 
 const DEFAULT_SAMPLE_1_LOGO = '/home/grahamp/dev/game-decks/marvel/assets/storm/logo.png';
 const DEFAULT_SAMPLE_1_ART = '/home/grahamp/dev/game-decks/marvel/assets/storm/image2.png';
@@ -12,6 +14,8 @@ async function main() {
   program
     .name('marvel-sticker-samples')
     .description('Generate a 1-page sample sheet of deck-box sticker designs (10 slots; first slot filled)')
+    .option('--format <pdf|yaml>', 'Output format (pdf writes a PDF file; yaml writes YAML to stdout)', 'pdf')
+    .option('--yaml-sample <number>', 'When --format yaml: which sample number to emit (1-based)', '1')
     .option('--page-size <a4|letter>', 'Page size', 'a4')
     .option('--orientation <auto|portrait|landscape>', 'Orientation selection', 'auto')
     .option('--columns <number>', 'Grid columns (columns * rows must be >= 10)', '2')
@@ -31,13 +35,21 @@ async function main() {
     .option('--sample-1-logo-max-height-mm <number>', 'Sample #1 logo max height (mm)', '18')
     .option('--sample-1-art-offset-x-mm <number>', 'Sample #1 art horizontal offset (mm)', '0')
     .option('--sample-1-art-offset-y-mm <number>', 'Sample #1 art vertical offset (mm)', '0')
-    .option('--sample-1-yellow <hex>', 'Sample #1 yellow shade (hex like #f7d117)', '#f7d117')
-    .option('--sample-1-gradient-width-mm <number>', 'Sample #1 fade width from yellow -> image (mm)', '34')
+    .option('--sample-1-gradient <hex>', 'Sample #1 fade color (hex like #f7d117)', '#f7d117')
+    .option('--sample-1-yellow <hex>', 'DEPRECATED: use --sample-1-gradient', '')
+    .option('--sample-1-gradient-width-mm <number>', 'Sample #1 fade width from gradient -> image (mm)', '34')
     .option('-o, --output <file>', 'Output PDF path', '')
     .parse(process.argv);
 
   const opts = program.opts();
   const errors = [];
+
+  const format = String(opts.format || 'pdf').trim().toLowerCase();
+  if (!['pdf', 'yaml'].includes(format)) {
+    errors.push('--format must be one of: pdf, yaml');
+  }
+
+  const yamlSample = parseIntNumber('--yaml-sample', opts.yamlSample, errors, { min: 1, max: 999 });
 
   const pageSize = String(opts.pageSize || 'a4').trim().toLowerCase();
   if (!['a4', 'letter'].includes(pageSize)) {
@@ -76,9 +88,12 @@ async function main() {
     errors.push('--count must be <= --columns * --rows');
   }
 
-  const sample1Yellow = String(opts.sample1Yellow || '').trim();
-  if (!/^#?[0-9a-f]{6}$/i.test(sample1Yellow)) {
-    errors.push('--sample-1-yellow must be a 6-digit hex color like #f7d117');
+  const sample1Gradient = String((opts.sample1Gradient || opts.sample1Yellow || '').trim() || '#f7d117');
+  if (!/^#?[0-9a-f]{6}$/i.test(sample1Gradient)) {
+    errors.push('--sample-1-gradient must be a 6-digit hex color like #f7d117');
+  }
+  if (String(opts.sample1Yellow || '').trim() && String(opts.sample1Gradient || '').trim()) {
+    errors.push('Use only one of: --sample-1-gradient, --sample-1-yellow');
   }
 
   const sample1Logo = resolveOptionalPath(opts.sample1Logo);
@@ -95,6 +110,48 @@ async function main() {
     throw new Error(`Invalid options:\n- ${errors.join('\n- ')}`);
   }
 
+  if (format === 'yaml') {
+    if (String(opts.output || '').trim()) {
+      throw new Error('--output is not used with --format yaml (YAML is written to stdout)');
+    }
+
+    const yamlConfig = buildStickerSheetYamlConfig({
+      pageSize,
+      orientation,
+      sheetMarginMm: numbers.sheetMarginMm,
+      gutterMm: numbers.gutterMm,
+      stickerWidthMm: numbers.stickerWidthMm,
+      stickerHeightMm: numbers.stickerHeightMm,
+      cornerRadiusMm: numbers.cornerRadiusMm,
+      columns: numbers.columns,
+      rows: numbers.rows,
+      count: numbers.count,
+      sampleNumber: yamlSample,
+      sample1Logo,
+      sample1Art,
+      sample1Gradient,
+      sample1GradientWidthMm: numbers.sample1GradientWidthMm,
+      sample1LogoOffsetXMm: numbers.sample1LogoOffsetXMm,
+      sample1LogoOffsetYMm: numbers.sample1LogoOffsetYMm,
+      sample1LogoMaxWidthMm: numbers.sample1LogoMaxWidthMm,
+      sample1LogoMaxHeightMm: numbers.sample1LogoMaxHeightMm,
+      sample1ArtOffsetXMm: numbers.sample1ArtOffsetXMm,
+      sample1ArtOffsetYMm: numbers.sample1ArtOffsetYMm,
+      debug: {
+        leftMm: 10,
+        rightFromRightMm: 50,
+        centerHorizontal: true,
+      },
+    });
+
+    process.stdout.write(
+      YAML.stringify(yamlConfig, {
+        indent: 2,
+      }),
+    );
+    return;
+  }
+
   const outputPath = resolveOutputPath(opts.output);
   const { pdfBytes, sheet } = await buildStickerSampleSheetPdf({
     pageSize,
@@ -102,7 +159,7 @@ async function main() {
     ...numbers,
     sample1Logo,
     sample1Art,
-    sample1Yellow,
+    sample1Gradient,
   });
 
   await fs.promises.writeFile(outputPath, pdfBytes);
@@ -156,4 +213,3 @@ main().catch(err => {
   console.error(message);
   process.exitCode = 1;
 });
-

@@ -83,7 +83,7 @@ function resolveSample1Assets(options) {
     artOffsetYMm: Number(options.sample1ArtOffsetYMm) || 0,
     logoMaxWidthMm: Number(options.sample1LogoMaxWidthMm) || 28,
     logoMaxHeightMm: Number(options.sample1LogoMaxHeightMm) || 18,
-    yellow: parseHexColor(options.sample1Yellow, rgb(0.97, 0.82, 0.09)),
+    gradient: parseHexColor(options.sample1Gradient ?? options.sample1Yellow, rgb(0.97, 0.82, 0.09)),
     gradientWidthMm: Number(options.sample1GradientWidthMm) || 34,
   };
 
@@ -104,7 +104,7 @@ function drawStickerSample1(page, rectMm, { embeddedLogo, embeddedArt }, sample1
 
   const cornerRadiusMm = (Number(sample1.cornerRadiusMm) || 2) * scale;
   withClipRoundedRectMm(page, rectMm, cornerRadiusMm, () => {
-    drawRectMm(page, rectMm, { color: sample1.yellow, opacity: 1 });
+    drawRectMm(page, rectMm, { color: sample1.gradient, opacity: 1 });
 
     if (embeddedArt) {
       drawImageCoverMm(page, embeddedArt, rectMm, {
@@ -115,7 +115,7 @@ function drawStickerSample1(page, rectMm, { embeddedLogo, embeddedArt }, sample1
     }
 
     drawYellowGradientLeftMm(page, rectMm, {
-      color: sample1.yellow,
+      color: sample1.gradient,
       widthMm: Math.max(0, sample1.gradientWidthMm * scale),
       steps: 42,
     });
