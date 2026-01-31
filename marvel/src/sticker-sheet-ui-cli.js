@@ -9,7 +9,7 @@ async function main() {
     .name('marvel-sticker-sheet-ui')
     .description('Interactive UI for editing marvel-sticker-sheet YAML configs')
     .option('--yaml <file>', 'YAML config path to load on startup', '')
-    .option('--host <host>', 'Host to bind (default: 127.0.0.1)', '127.0.0.1')
+    .option('--host <host>', 'Host to bind (default: localhost)', 'localhost')
     .option('--port <number>', 'Port to bind', '5173')
     .option('--no-open', 'Do not open a browser tab')
     .parse(process.argv);
@@ -47,7 +47,7 @@ async function main() {
 
   await server.listen();
 
-  const url = new URL(server.resolvedUrls?.local?.[0] || `http://${host}:${port}/`);
+  const url = new URL(`http://${host}:${port}/`);
   if (yamlPath) url.searchParams.set('yamlPath', yamlPath);
 
   console.log(`Sticker Sheet UI: ${url.toString()}`);

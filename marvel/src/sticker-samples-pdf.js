@@ -117,6 +117,7 @@ function drawStickerSample1(page, rectMm, { embeddedLogo, embeddedArt }, sample1
     drawYellowGradientLeftMm(page, rectMm, {
       color: sample1.gradient,
       widthMm: Math.max(0, sample1.gradientWidthMm * scale),
+      solidWidthMm: 20 * scale,
       steps: 42,
     });
   });
@@ -141,16 +142,22 @@ function drawStickerSample1(page, rectMm, { embeddedLogo, embeddedArt }, sample1
   }
 }
 
-function drawYellowGradientLeftMm(page, rectMm, { color, widthMm, steps }) {
+function drawYellowGradientLeftMm(page, rectMm, { color, widthMm, steps, solidWidthMm = 20 }) {
   const maxWidth = Math.max(0, Math.min(Number(widthMm) || 0, rectMm.width));
   if (maxWidth <= 0) return;
+  const solid = Math.max(0, Math.min(Number(solidWidthMm) || 0, maxWidth));
+  if (solid > 0) {
+    drawRectMm(page, { x: rectMm.x, y: rectMm.y, width: solid + 0.001, height: rectMm.height }, { color, opacity: 1 });
+  }
+  const fadeWidth = maxWidth - solid;
+  if (fadeWidth <= 0) return;
   const n = clampInt(steps ?? 40, { min: 2, max: 200 });
-  const stripe = maxWidth / n;
+  const stripe = fadeWidth / n;
 
   for (let i = 0; i < n; i++) {
     const t = i / (n - 1);
     const opacity = 1 - t;
-    const x = rectMm.x + i * stripe;
+    const x = rectMm.x + solid + i * stripe;
     drawRectMm(page, { x, y: rectMm.y, width: stripe + 0.001, height: rectMm.height }, { color, opacity });
   }
 }

@@ -13,7 +13,7 @@ sheet:
   rows: 5
 debug:
   leftMm: 10
-  rightFromRightMm: 50
+  rightFromRightMm: 40
   centerHorizontal: true
 defaults:
   design: sample1
@@ -31,6 +31,7 @@ stickers:
     artOffsetXMm: 0
     artOffsetYMm: 0
     artScale: 1
+    gradient: "#f7d117"
 `;
 
 export function parseYamlOrThrow(yamlText) {
@@ -81,7 +82,7 @@ export function normalizeConfigForUi(rawConfig) {
 
   // Debug: always specified (toggle controls only show/hide).
   cfg.debug.leftMm = normalizeNumber(cfg.debug.leftMm, 10);
-  cfg.debug.rightFromRightMm = normalizeNumber(cfg.debug.rightFromRightMm, 50);
+  cfg.debug.rightFromRightMm = normalizeNumber(cfg.debug.rightFromRightMm, 40);
   cfg.debug.centerHorizontal = cfg.debug.centerHorizontal !== false;
 
   // Defaults: always specified (most controls edit defaults).
@@ -111,6 +112,9 @@ export function normalizeConfigForUi(rawConfig) {
     if (sticker.artOffsetXMm != null) sticker.artOffsetXMm = normalizeNumber(sticker.artOffsetXMm, 0);
     if (sticker.artOffsetYMm != null) sticker.artOffsetYMm = normalizeNumber(sticker.artOffsetYMm, 0);
     if (sticker.artScale != null) sticker.artScale = normalizeNumber(sticker.artScale, 1);
+
+    // UI convention: store gradient per (non-empty) sticker.
+    if (sticker.gradient == null && (sticker.name || sticker.art)) sticker.gradient = cfg.defaults.gradient;
   }
 
   if (!['a4', 'letter'].includes(cfg.sheet.pageSize)) errors.push('sheet.pageSize must be a4 or letter');
@@ -145,13 +149,13 @@ export function updateSticker(config, stickerIndex, patch) {
   const next = structuredClone(config);
   next.stickers = Array.isArray(next.stickers) ? next.stickers : [];
   while (next.stickers.length <= stickerIndex) next.stickers.push({});
-  next.stickers[stickerIndex] = { ...ensureObject(next.stickers[stickerIndex]), ...patch };
+  next.stickers[stickerIndex] = applyPatch(ensureObject(next.stickers[stickerIndex]), patch);
   return next;
 }
 
 export function updateDefaults(config, patch) {
   const next = structuredClone(config);
-  next.defaults = { ...ensureObject(next.defaults), ...patch };
+  next.defaults = applyPatch(ensureObject(next.defaults), patch);
   return next;
 }
 
@@ -173,6 +177,16 @@ export function roundMm(value, stepMm = 0.1) {
 
 function ensureObject(value) {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+}
+
+function applyPatch(target, patch) {
+  const out = { ...target };
+  const src = ensureObject(patch);
+  for (const [key, value] of Object.entries(src)) {
+    if (value === undefined) delete out[key];
+    else out[key] = value;
+  }
+  return out;
 }
 
 function normalizeNumber(value, fallback) {

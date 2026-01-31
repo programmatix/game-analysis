@@ -27,7 +27,7 @@ test('buildStickerSheetPdf: generates a valid 1-page PDF from a config object', 
       },
       debug: {
         leftMm: 10,
-        rightFromRightMm: 50,
+        rightFromRightMm: 40,
         centerHorizontal: true,
       },
       stickers: [

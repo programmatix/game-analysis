@@ -139,7 +139,7 @@ async function main() {
       sample1ArtOffsetYMm: numbers.sample1ArtOffsetYMm,
       debug: {
         leftMm: 10,
-        rightFromRightMm: 50,
+        rightFromRightMm: 40,
         centerHorizontal: true,
       },
     });

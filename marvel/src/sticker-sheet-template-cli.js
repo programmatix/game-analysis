@@ -49,7 +49,7 @@ async function main() {
     sample1ArtOffsetYMm: 0,
     debug: {
       leftMm: 10,
-      rightFromRightMm: 50,
+      rightFromRightMm: 40,
       centerHorizontal: true,
     },
   });

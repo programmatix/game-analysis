@@ -108,8 +108,10 @@ export default function StickerPreview({
   }, [logoImg, logoTarget.width, logoTarget.height]);
 
   const gradientWidthMm = Math.max(0, Math.min(Number(sticker.gradientWidthMm) || 0, stickerW));
+  const gradientSolidMm = Math.max(0, Math.min(20, gradientWidthMm));
+  const gradientFadeMm = Math.max(0, gradientWidthMm - gradientSolidMm);
   const x1 = Number(debug?.leftMm) || 10;
-  const x2 = stickerW - (Number(debug?.rightFromRightMm) || 50);
+  const x2 = stickerW - (Number(debug?.rightFromRightMm) || 40);
   const yMid = stickerH / 2;
 
   return (
@@ -139,16 +141,23 @@ export default function StickerPreview({
               />
             ) : null}
             {gradientWidthMm > 0 ? (
-              <Rect
-                x={0}
-                y={0}
-                width={gradientWidthMm}
-                height={stickerH}
-                fillLinearGradientStartPoint={{ x: 0, y: 0 }}
-                fillLinearGradientEndPoint={{ x: gradientWidthMm, y: 0 }}
-                fillLinearGradientColorStops={[0, rgba(sticker.gradient, 1), 1, rgba(sticker.gradient, 0)]}
-                listening={false}
-              />
+              <>
+                {gradientSolidMm > 0 ? (
+                  <Rect x={0} y={0} width={gradientSolidMm} height={stickerH} fill={rgba(sticker.gradient, 1)} listening={false} />
+                ) : null}
+                {gradientFadeMm > 0 ? (
+                  <Rect
+                    x={gradientSolidMm}
+                    y={0}
+                    width={gradientFadeMm}
+                    height={stickerH}
+                    fillLinearGradientStartPoint={{ x: 0, y: 0 }}
+                    fillLinearGradientEndPoint={{ x: gradientFadeMm, y: 0 }}
+                    fillLinearGradientColorStops={[0, rgba(sticker.gradient, 1), 1, rgba(sticker.gradient, 0)]}
+                    listening={false}
+                  />
+                ) : null}
+              </>
             ) : null}
           </Group>
 
@@ -165,7 +174,17 @@ export default function StickerPreview({
                 });
               }}
             >
-              <Rect x={0} y={0} width={logoTarget.width} height={logoTarget.height} fillEnabled={false} stroke="rgba(255,255,255,0.35)" strokeWidth={0.1} />
+              <Rect x={0} y={0} width={logoTarget.width} height={logoTarget.height} fill="rgba(0,0,0,0.01)" />
+              <Rect
+                x={0}
+                y={0}
+                width={logoTarget.width}
+                height={logoTarget.height}
+                fillEnabled={false}
+                stroke="rgba(255,255,255,0.35)"
+                strokeWidth={0.1}
+                listening={false}
+              />
               <KonvaImage image={logoImg} x={logoContain.x} y={logoContain.y} width={logoContain.width} height={logoContain.height} opacity={0.98} listening={false} />
             </Group>
           ) : null}

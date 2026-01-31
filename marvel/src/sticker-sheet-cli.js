@@ -157,7 +157,7 @@ function normalizeDebug(raw, errors) {
   const src = raw && typeof raw === 'object' ? raw : {};
   const debug = {
     leftMm: parseNumber('debug.leftMm', src.leftMm, errors, { min: -10000, fallback: 10 }),
-    rightFromRightMm: parseNumber('debug.rightFromRightMm', src.rightFromRightMm, errors, { min: -10000, fallback: 50 }),
+    rightFromRightMm: parseNumber('debug.rightFromRightMm', src.rightFromRightMm, errors, { min: -10000, fallback: 40 }),
     centerHorizontal: src.centerHorizontal !== false,
   };
   return debug;

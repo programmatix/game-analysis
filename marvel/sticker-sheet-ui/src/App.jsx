@@ -10,11 +10,16 @@ export default function App() {
   const [errors, setErrors] = useState([]);
   const [selectedSticker, setSelectedSticker] = useState(0);
   const [showDebug, setShowDebug] = useState(false);
+  const [canEyeDropper, setCanEyeDropper] = useState(() => (typeof window !== 'undefined' ? Boolean(window.EyeDropper) && Boolean(window.isSecureContext) : false));
+  const [isSecureContext, setIsSecureContext] = useState(() => (typeof window !== 'undefined' ? Boolean(window.isSecureContext) : true));
 
   const basePath = useMemo(() => dirnameFromPath(yamlPath), [yamlPath]);
 
   useEffect(() => {
     (async () => {
+      setIsSecureContext(Boolean(window.isSecureContext));
+      setCanEyeDropper(Boolean(window.EyeDropper) && Boolean(window.isSecureContext));
+
       const url = new URL(window.location.href);
       const paramPath = String(url.searchParams.get('yamlPath') || '').trim();
       if (paramPath) setYamlPath(paramPath);
@@ -218,8 +223,8 @@ export default function App() {
             <label className="field">
               Hex
               <input
-                value={config.defaults?.gradient || '#f7d117'}
-                onChange={e => applyConfigUpdate(prev => updateDefaults(prev, { gradient: e.target.value }))}
+                value={selected?.gradient || '#f7d117'}
+                onChange={e => applyConfigUpdate(prev => updateSticker(prev, selectedSticker, { gradient: e.target.value }))}
                 placeholder="#f7d117"
               />
             </label>
@@ -227,23 +232,42 @@ export default function App() {
               Picker
               <input
                 type="color"
-                value={config.defaults?.gradient || '#f7d117'}
-                onChange={e => applyConfigUpdate(prev => updateDefaults(prev, { gradient: e.target.value }))}
+                value={selected?.gradient || '#f7d117'}
+                onChange={e => applyConfigUpdate(prev => updateSticker(prev, selectedSticker, { gradient: e.target.value }))}
               />
             </label>
           </div>
           <div className="row">
             <button
               onClick={async () => {
-                if (!window.EyeDropper) return;
+                if (!window.EyeDropper) {
+                  alert('EyeDropper is not supported in this browser.');
+                  return;
+                }
+                if (!window.isSecureContext) {
+                  alert('EyeDropper requires a secure context (try http://localhost or https).');
+                  return;
+                }
                 const eyeDropper = new window.EyeDropper();
                 const result = await eyeDropper.open();
-                applyConfigUpdate(prev => updateDefaults(prev, { gradient: result?.sRGBHex || prev.defaults?.gradient || '#f7d117' }));
+                applyConfigUpdate(prev => updateSticker(prev, selectedSticker, { gradient: result?.sRGBHex || '#f7d117' }));
               }}
-              disabled={!window.EyeDropper}
-              title={window.EyeDropper ? 'Pick a color from the screen' : 'EyeDropper API not supported in this browser'}
+              disabled={!canEyeDropper}
+              title={
+                canEyeDropper
+                  ? 'Pick a color from the screen'
+                  : !isSecureContext
+                    ? 'EyeDropper requires a secure context (try http://localhost)'
+                    : 'EyeDropper API not supported in this browser'
+              }
             >
               Dropper
+            </button>
+            <button
+              onClick={() => applyConfigUpdate(prev => updateSticker(prev, selectedSticker, { gradient: prev?.defaults?.gradient || '#f7d117' }))}
+              title="Reset this sticker's gradient to defaults.gradient"
+            >
+              Reset
             </button>
             <label className="field">
               Fade width (mm)

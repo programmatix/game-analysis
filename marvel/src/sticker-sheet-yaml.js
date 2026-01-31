@@ -79,7 +79,7 @@ function normalizeDebug(debug) {
   const src = debug && typeof debug === 'object' ? debug : {};
   return {
     leftMm: Number(src.leftMm) || 10,
-    rightFromRightMm: Number(src.rightFromRightMm) || 50,
+    rightFromRightMm: Number(src.rightFromRightMm) || 40,
     centerHorizontal: src.centerHorizontal !== false,
   };
 }

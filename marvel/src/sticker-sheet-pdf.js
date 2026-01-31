@@ -175,16 +175,22 @@ function drawStickerSample1(page, rectMm, { embeddedLogo, embeddedArt }, cfg) {
   }
 }
 
-function drawGradientLeftMm(page, rectMm, { color, widthMm, steps }) {
+function drawGradientLeftMm(page, rectMm, { color, widthMm, steps, solidWidthMm = 20 }) {
   const maxWidth = Math.max(0, Math.min(Number(widthMm) || 0, rectMm.width));
   if (maxWidth <= 0) return;
+  const solid = Math.max(0, Math.min(Number(solidWidthMm) || 0, maxWidth));
+  if (solid > 0) {
+    drawRectMm(page, { x: rectMm.x, y: rectMm.y, width: solid + 0.001, height: rectMm.height }, { color, opacity: 1 });
+  }
+  const fadeWidth = maxWidth - solid;
+  if (fadeWidth <= 0) return;
   const n = clampInt(steps ?? 40, { min: 2, max: 200 });
-  const stripe = maxWidth / n;
+  const stripe = fadeWidth / n;
 
   for (let i = 0; i < n; i++) {
     const t = i / (n - 1);
     const opacity = 1 - t;
-    const x = rectMm.x + i * stripe;
+    const x = rectMm.x + solid + i * stripe;
     drawRectMm(page, { x, y: rectMm.y, width: stripe + 0.001, height: rectMm.height }, { color, opacity });
   }
 }
@@ -197,7 +203,7 @@ function drawDebugGuidesForStickerMm(page, rectMm, config) {
   const centerHorizontal = debug.centerHorizontal !== false;
 
   const x1 = rectMm.x + (Number.isFinite(leftMm) ? leftMm : 10);
-  const x2 = rectMm.x + rectMm.width - (Number.isFinite(rightFromRightMm) ? rightFromRightMm : 50);
+  const x2 = rectMm.x + rectMm.width - (Number.isFinite(rightFromRightMm) ? rightFromRightMm : 40);
 
   const red = rgb(1, 0, 0);
   const thicknessPt = 0.9;
