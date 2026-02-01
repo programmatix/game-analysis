@@ -12,6 +12,7 @@ export default function App() {
   const [showDebug, setShowDebug] = useState(false);
   const [canEyeDropper, setCanEyeDropper] = useState(() => (typeof window !== 'undefined' ? Boolean(window.EyeDropper) && Boolean(window.isSecureContext) : false));
   const [isSecureContext, setIsSecureContext] = useState(() => (typeof window !== 'undefined' ? Boolean(window.isSecureContext) : true));
+  const [pickFromPreview, setPickFromPreview] = useState(false);
 
   const basePath = useMemo(() => dirnameFromPath(yamlPath), [yamlPath]);
 
@@ -105,7 +106,7 @@ export default function App() {
         <div className="title">Marvel Sticker Sheet UI</div>
         <div className="spacer" />
         <label className="toggle">
-          <input type="checkbox" checked={showDebug} onChange={e => setShowDebug(e.target.checked)} /> Debug guides
+          <input type="checkbox" checked={showDebug} onChange={e => setShowDebug(e.target.checked)} /> Debug guides (PDF: `drawDebugGuidesForStickerMm`, UI: `StickerPreview`)
         </label>
         <button onClick={copyYaml} disabled={!outputYaml}>
           Copy YAML
@@ -129,6 +130,7 @@ export default function App() {
 
         <section className="panel center">
           <h2>Preview</h2>
+          <div className="value">{selected?.name || '(Unnamed)'}</div>
           {selected ? (
             <StickerPreview
               sheet={config.sheet}
@@ -136,6 +138,7 @@ export default function App() {
               showDebug={showDebug}
               sticker={selected}
               basePath={basePath}
+              pickingColor={pickFromPreview}
               onArtMove={patch =>
                 applyConfigUpdate(prev =>
                   updateSticker(prev, selectedSticker, {
@@ -146,12 +149,16 @@ export default function App() {
               }
               onLogoMove={patch =>
                 applyConfigUpdate(prev =>
-                  updateDefaults(prev, {
+                  updateSticker(prev, selectedSticker, {
                     logoOffsetXMm: roundMm(patch.logoOffsetXMm),
                     logoOffsetYMm: roundMm(patch.logoOffsetYMm),
                   }),
                 )
               }
+              onPickColor={hex => {
+                applyConfigUpdate(prev => updateSticker(prev, selectedSticker, { gradient: hex }));
+                setPickFromPreview(false);
+              }}
             />
           ) : null}
           <div className="hint">Drag art to position it. Drag the logo to shift it. Use controls to zoom and set gradient.</div>
@@ -162,8 +169,7 @@ export default function App() {
           <div className="stickerList">
             {(config.stickers || []).map((s, idx) => (
               <button key={idx} className={idx === selectedSticker ? 'chip active' : 'chip'} onClick={() => setSelectedSticker(idx)}>
-                {idx + 1}
-                {s?.name ? ` · ${String(s.name)}` : ''}
+                {idx + 1} · {(getEffectiveSticker(config, idx)?.name || '(Unnamed)')}
               </button>
             ))}
           </div>
@@ -200,7 +206,7 @@ export default function App() {
             <button onClick={() => applyConfigUpdate(prev => updateSticker(prev, selectedSticker, { artOffsetXMm: 0, artOffsetYMm: 0 }))}>Center</button>
           </div>
 
-          <h2>Logo (defaults)</h2>
+          <h2>Logo</h2>
           <div className="row">
             <label className="field">
               Path
@@ -213,9 +219,24 @@ export default function App() {
           </div>
           <div className="row">
             <div className="value">
-              Offset: {Number(config.defaults?.logoOffsetXMm || 0).toFixed(1)}mm, {Number(config.defaults?.logoOffsetYMm || 0).toFixed(1)}mm
+              Offset: {Number(selected?.logoOffsetXMm || 0).toFixed(1)}mm, {Number(selected?.logoOffsetYMm || 0).toFixed(1)}mm
             </div>
-            <button onClick={() => applyConfigUpdate(prev => updateDefaults(prev, { logoOffsetXMm: 0, logoOffsetYMm: 0 }))}>Reset</button>
+            <button onClick={() => applyConfigUpdate(prev => updateSticker(prev, selectedSticker, { logoOffsetXMm: 0, logoOffsetYMm: 0 }))}>Reset</button>
+          </div>
+          <div className="row">
+            <label className="field">
+              Scale
+              <input
+                type="range"
+                min="0.25"
+                max="2"
+                step="0.01"
+                value={Number(selected?.logoScale) || 1}
+                onChange={e => applyConfigUpdate(prev => updateSticker(prev, selectedSticker, { logoScale: Number(e.target.value) }))}
+              />
+            </label>
+            <div className="value">{(Number(selected?.logoScale) || 1).toFixed(2)}×</div>
+            <button onClick={() => applyConfigUpdate(prev => updateSticker(prev, selectedSticker, { logoScale: 1 }))}>1×</button>
           </div>
 
           <h2>Gradient</h2>
@@ -252,7 +273,7 @@ export default function App() {
                 const result = await eyeDropper.open();
                 applyConfigUpdate(prev => updateSticker(prev, selectedSticker, { gradient: result?.sRGBHex || '#f7d117' }));
               }}
-              disabled={!canEyeDropper}
+              disabled={false}
               title={
                 canEyeDropper
                   ? 'Pick a color from the screen'
@@ -261,7 +282,13 @@ export default function App() {
                     : 'EyeDropper API not supported in this browser'
               }
             >
-              Dropper
+              System dropper
+            </button>
+            <button
+              onClick={() => setPickFromPreview(v => !v)}
+              title="Click the art in the preview to pick a color"
+            >
+              {pickFromPreview ? 'Cancel pick' : 'Pick from preview'}
             </button>
             <button
               onClick={() => applyConfigUpdate(prev => updateSticker(prev, selectedSticker, { gradient: prev?.defaults?.gradient || '#f7d117' }))}

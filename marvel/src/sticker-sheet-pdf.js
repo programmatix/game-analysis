@@ -127,6 +127,7 @@ async function drawSticker(page, pdfDoc, imageCache, rectMm, sticker, { cornerRa
     artScale: Number(sticker.artScale) || 1,
     logoMaxWidthMm: Number(sticker.logoMaxWidthMm) || 28,
     logoMaxHeightMm: Number(sticker.logoMaxHeightMm) || 18,
+    logoScale: Number(sticker.logoScale) || 1,
     gradient,
     gradientWidthMm: Number(sticker.gradientWidthMm) || 34,
   });
@@ -151,6 +152,7 @@ function drawStickerSample1(page, rectMm, { embeddedLogo, embeddedArt }, cfg) {
     drawGradientLeftMm(page, rectMm, {
       color: cfg.gradient,
       widthMm: Math.max(0, Number(cfg.gradientWidthMm) || 0),
+      solidWidthMm: 20,
       steps: 42,
     });
   });
@@ -167,8 +169,8 @@ function drawStickerSample1(page, rectMm, { embeddedLogo, embeddedArt }, cfg) {
     const target = {
       x: logoArea.x + (Number(cfg.logoOffsetXMm) || 0),
       y: logoArea.y + (Number(cfg.logoOffsetYMm) || 0),
-      width: Math.min(Number(cfg.logoMaxWidthMm) || 28, logoArea.width),
-      height: Math.min(Number(cfg.logoMaxHeightMm) || 18, logoArea.height),
+      width: Math.min((Number(cfg.logoMaxWidthMm) || 28) * (Number(cfg.logoScale) || 1), logoArea.width),
+      height: Math.min((Number(cfg.logoMaxHeightMm) || 18) * (Number(cfg.logoScale) || 1), logoArea.height),
     };
 
     drawImageContainMm(page, embeddedLogo, target, { opacity: 0.98 });

@@ -40,6 +40,7 @@ function buildStickerSheetYamlConfig({
     logoOffsetYMm: Number(sample1LogoOffsetYMm) || 0,
     logoMaxWidthMm: Number(sample1LogoMaxWidthMm) || 28,
     logoMaxHeightMm: Number(sample1LogoMaxHeightMm) || 18,
+    logoScale: 1,
     gradient: String((sample1Gradient ?? sample1Yellow) || '#f7d117').trim(),
     gradientWidthMm: Number(sample1GradientWidthMm) || 34,
     artScale: Number(sample1ArtScale) || 1,

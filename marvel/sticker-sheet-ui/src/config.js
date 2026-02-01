@@ -22,6 +22,7 @@ defaults:
   logoOffsetYMm: 0
   logoMaxWidthMm: 28
   logoMaxHeightMm: 18
+  logoScale: 1
   gradient: "#f7d117"
   gradientWidthMm: 34
   artScale: 1
@@ -92,6 +93,7 @@ export function normalizeConfigForUi(rawConfig) {
   cfg.defaults.logoOffsetYMm = normalizeNumber(cfg.defaults.logoOffsetYMm, 0);
   cfg.defaults.logoMaxWidthMm = normalizeNumber(cfg.defaults.logoMaxWidthMm, 28);
   cfg.defaults.logoMaxHeightMm = normalizeNumber(cfg.defaults.logoMaxHeightMm, 18);
+  cfg.defaults.logoScale = normalizeNumber(cfg.defaults.logoScale, 1);
   cfg.defaults.gradient = normalizeHexColor(cfg.defaults.gradient || '#f7d117', errors, 'defaults.gradient');
   cfg.defaults.gradientWidthMm = normalizeNumber(cfg.defaults.gradientWidthMm, 34);
   cfg.defaults.artScale = normalizeNumber(cfg.defaults.artScale, 1);
@@ -137,6 +139,7 @@ export function getEffectiveSticker(config, stickerIndex) {
     logoOffsetYMm: Number(sticker.logoOffsetYMm ?? defaults.logoOffsetYMm ?? 0) || 0,
     logoMaxWidthMm: Number(sticker.logoMaxWidthMm ?? defaults.logoMaxWidthMm ?? 28) || 28,
     logoMaxHeightMm: Number(sticker.logoMaxHeightMm ?? defaults.logoMaxHeightMm ?? 18) || 18,
+    logoScale: Number(sticker.logoScale ?? defaults.logoScale ?? 1) || 1,
     gradient: String(sticker.gradient ?? defaults.gradient ?? '#f7d117').trim() || '#f7d117',
     gradientWidthMm: Number(sticker.gradientWidthMm ?? defaults.gradientWidthMm ?? 34) || 34,
     artOffsetXMm: Number(sticker.artOffsetXMm ?? 0) || 0,

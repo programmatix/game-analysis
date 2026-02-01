@@ -48,14 +48,22 @@ function computeContainRectMm(imgW, imgH, targetW, targetH) {
   return { x, y, width, height };
 }
 
+function rgbToHex(r, g, b) {
+  const clamp = n => Math.max(0, Math.min(255, Math.round(Number(n) || 0)));
+  const to2 = n => clamp(n).toString(16).padStart(2, '0');
+  return `#${to2(r)}${to2(g)}${to2(b)}`;
+}
+
 export default function StickerPreview({
   sheet,
   debug,
   showDebug,
   sticker,
   basePath,
+  pickingColor,
   onArtMove,
   onLogoMove,
+  onPickColor,
 }) {
   const stickerW = Number(sheet?.stickerWidthMm) || 70;
   const stickerH = Number(sheet?.stickerHeightMm) || 25;
@@ -93,11 +101,12 @@ export default function StickerPreview({
   const safeRect = { x: paddingMm, y: paddingMm, width: stickerW - paddingMm * 2, height: stickerH - paddingMm * 2 };
   const logoAreaWidthMm = Math.min(safeRect.width * 0.45, (Number(sticker.logoMaxWidthMm) || 28) + 6);
   const logoArea = { x: safeRect.x, y: safeRect.y, width: logoAreaWidthMm, height: safeRect.height };
+  const logoScale = Math.max(0.1, Number(sticker.logoScale) || 1);
   const logoTarget = {
     x: logoArea.x + (Number(sticker.logoOffsetXMm) || 0),
     y: logoArea.y + (Number(sticker.logoOffsetYMm) || 0),
-    width: Math.min(Number(sticker.logoMaxWidthMm) || 28, logoArea.width),
-    height: Math.min(Number(sticker.logoMaxHeightMm) || 18, logoArea.height),
+    width: Math.min((Number(sticker.logoMaxWidthMm) || 28) * logoScale, logoArea.width),
+    height: Math.min((Number(sticker.logoMaxHeightMm) || 18) * logoScale, logoArea.height),
   };
 
   const baseLogoTarget = { ...logoTarget, x: logoArea.x, y: logoArea.y };
@@ -114,8 +123,37 @@ export default function StickerPreview({
   const x2 = stickerW - (Number(debug?.rightFromRightMm) || 40);
   const yMid = stickerH / 2;
 
+  function handleStagePointerDown(e) {
+    if (!pickingColor) return;
+    if (!artImg || !artRect) return;
+    const stage = e.target?.getStage?.();
+    if (!stage) return;
+    const pos = stage.getPointerPosition();
+    if (!pos) return;
+
+    const xMm = pos.x / pxPerMm;
+    const yMm = pos.y / pxPerMm;
+    const insideArt = xMm >= artRect.x && xMm <= artRect.x + artRect.width && yMm >= artRect.y && yMm <= artRect.y + artRect.height;
+    if (!insideArt) return;
+
+    const u = (xMm - artRect.x) / artRect.width;
+    const v = (yMm - artRect.y) / artRect.height;
+    const px = Math.floor(u * artImg.naturalWidth);
+    const py = Math.floor(v * artImg.naturalHeight);
+    if (px < 0 || py < 0 || px >= artImg.naturalWidth || py >= artImg.naturalHeight) return;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = artImg.naturalWidth;
+    canvas.height = artImg.naturalHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.drawImage(artImg, 0, 0);
+    const data = ctx.getImageData(px, py, 1, 1).data;
+    onPickColor?.(rgbToHex(data[0], data[1], data[2]));
+  }
+
   return (
-    <Stage width={stageW} height={stageH}>
+    <Stage width={stageW} height={stageH} onPointerDown={handleStagePointerDown}>
       <Layer>
         <Group scaleX={pxPerMm} scaleY={pxPerMm}>
           <Group
@@ -175,16 +213,6 @@ export default function StickerPreview({
               }}
             >
               <Rect x={0} y={0} width={logoTarget.width} height={logoTarget.height} fill="rgba(0,0,0,0.01)" />
-              <Rect
-                x={0}
-                y={0}
-                width={logoTarget.width}
-                height={logoTarget.height}
-                fillEnabled={false}
-                stroke="rgba(255,255,255,0.35)"
-                strokeWidth={0.1}
-                listening={false}
-              />
               <KonvaImage image={logoImg} x={logoContain.x} y={logoContain.y} width={logoContain.width} height={logoContain.height} opacity={0.98} listening={false} />
             </Group>
           ) : null}
