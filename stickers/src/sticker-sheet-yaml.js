@@ -1,15 +1,14 @@
-const path = require('path');
-
 function buildStickerSheetYamlConfig({
   pageSize,
   orientation,
   sheetMarginMm,
   gutterMm,
   stickerWidthMm,
+  topStickerHeightMm,
+  frontStickerHeightMm,
   stickerHeightMm,
   cornerRadiusMm,
   columns,
-  rows,
   count,
   sampleNumber,
   sample1Logo,
@@ -34,8 +33,7 @@ function buildStickerSheetYamlConfig({
   const stickerCount = clampInt(count ?? 10, { min: 1, max: 200 });
 
   const defaults = {
-    design: 'sample1',
-    logo: normalizePath(sample1Logo),
+    logo: normalizePathString(sample1Logo),
     logoOffsetXMm: Number(sample1LogoOffsetXMm) || 0,
     logoOffsetYMm: Number(sample1LogoOffsetYMm) || 0,
     logoMaxWidthMm: Number(sample1LogoMaxWidthMm) || 28,
@@ -47,26 +45,35 @@ function buildStickerSheetYamlConfig({
   };
 
   const stickers = [];
+  const sampleName = 'Sample';
   stickers.push({
-    name: '',
-    art: normalizePath(sample1Art),
+    name: sampleName,
+    kind: 'top',
+    art: normalizePathString(sample1Art),
+    artOffsetXMm: Number(sample1ArtOffsetXMm) || 0,
+    artOffsetYMm: Number(sample1ArtOffsetYMm) || 0,
+  });
+  stickers.push({
+    name: sampleName,
+    kind: 'front',
+    art: normalizePathString(sample1Art),
     artOffsetXMm: Number(sample1ArtOffsetXMm) || 0,
     artOffsetYMm: Number(sample1ArtOffsetYMm) || 0,
   });
   while (stickers.length < stickerCount) stickers.push({});
 
   const yamlConfig = {
-    version: 1,
+    version: 2,
     sheet: {
       pageSize: String(pageSize || 'a4').trim().toLowerCase(),
       orientation: String(orientation || 'auto').trim().toLowerCase(),
       marginMm: Number(sheetMarginMm) || 8,
       gutterMm: Number(gutterMm) || 4,
       stickerWidthMm: Number(stickerWidthMm) || 70,
-      stickerHeightMm: Number(stickerHeightMm) || 25,
+      topStickerHeightMm: Number(topStickerHeightMm ?? stickerHeightMm) || 25,
+      frontStickerHeightMm: Number(frontStickerHeightMm) || 40,
       cornerRadiusMm: Number(cornerRadiusMm) || 2,
       columns: clampInt(columns ?? 2, { min: 1, max: 10 }),
-      rows: clampInt(rows ?? 5, { min: 1, max: 40 }),
     },
     debug: normalizeDebug(debug),
     defaults,
@@ -85,10 +92,9 @@ function normalizeDebug(debug) {
   };
 }
 
-function normalizePath(value) {
+function normalizePathString(value) {
   const raw = typeof value === 'string' ? value.trim() : '';
-  if (!raw) return '';
-  return path.resolve(raw);
+  return raw;
 }
 
 function clampInt(value, { min = 1, max = 999 } = {}) {

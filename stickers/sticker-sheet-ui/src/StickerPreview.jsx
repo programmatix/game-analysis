@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Stage, Layer, Group, Rect, Line, Image as KonvaImage } from 'react-konva';
+import { Stage, Layer, Group, Rect, Line, Text as KonvaText, Image as KonvaImage } from 'react-konva';
 import useImage from 'use-image';
 import { fileUrlForPath } from './api.js';
 
@@ -55,19 +55,23 @@ function rgbToHex(r, g, b) {
 }
 
 export default function StickerPreview({
-  sheet,
+  widthMm,
+  heightMm,
+  cornerRadiusMm,
   debug,
   showDebug,
   sticker,
+  kind,
   basePath,
   pickingColor,
   onArtMove,
   onLogoMove,
   onPickColor,
 }) {
-  const stickerW = Number(sheet?.stickerWidthMm) || 70;
-  const stickerH = Number(sheet?.stickerHeightMm) || 25;
-  const cornerRadiusMm = Number(sheet?.cornerRadiusMm) || 2;
+  const stickerW = Number(widthMm) || 70;
+  const stickerH = Number(heightMm) || 25;
+  const radiusMm = Number(cornerRadiusMm) || 2;
+  const stickerKind = String(kind || sticker?.kind || 'top').trim().toLowerCase() || 'top';
 
   const artUrl = sticker?.art ? fileUrlForPath(sticker.art, { basePath }) : '';
   const logoUrl = sticker?.logo ? fileUrlForPath(sticker.logo, { basePath }) : '';
@@ -125,6 +129,7 @@ export default function StickerPreview({
 
   function handleStagePointerDown(e) {
     if (!pickingColor) return;
+    if (stickerKind !== 'top') return;
     if (!artImg || !artRect) return;
     const stage = e.target?.getStage?.();
     if (!stage) return;
@@ -157,9 +162,9 @@ export default function StickerPreview({
       <Layer>
         <Group scaleX={pxPerMm} scaleY={pxPerMm}>
           <Group
-            clipFunc={ctx => clipRoundedRect(ctx, 0, 0, stickerW, stickerH, cornerRadiusMm)}
+            clipFunc={ctx => clipRoundedRect(ctx, 0, 0, stickerW, stickerH, radiusMm)}
           >
-            <Rect x={0} y={0} width={stickerW} height={stickerH} fill={sticker.gradient || '#f7d117'} />
+            <Rect x={0} y={0} width={stickerW} height={stickerH} fill={stickerKind === 'top' ? (sticker.gradient || '#f7d117') : '#ffffff'} />
             {artImg && artRect ? (
               <KonvaImage
                 image={artImg}
@@ -178,7 +183,7 @@ export default function StickerPreview({
                 }}
               />
             ) : null}
-            {gradientWidthMm > 0 ? (
+            {stickerKind === 'top' && gradientWidthMm > 0 ? (
               <>
                 {gradientSolidMm > 0 ? (
                   <Rect x={0} y={0} width={gradientSolidMm} height={stickerH} fill={rgba(sticker.gradient, 1)} listening={false} />
@@ -217,7 +222,39 @@ export default function StickerPreview({
             </Group>
           ) : null}
 
-          <Rect x={0} y={0} width={stickerW} height={stickerH} cornerRadius={cornerRadiusMm} stroke="rgba(0,0,0,0.5)" strokeWidth={0.15} listening={false} />
+          {stickerKind === 'top'
+            ? (Array.isArray(sticker?.textOverlays) ? sticker.textOverlays : []).map((overlay, idx) => {
+                const text = String(overlay?.text || '');
+                if (!text) return null;
+                const xMm = Number(overlay?.xMm) || 0;
+                const yMm = Number(overlay?.yMm) || 0;
+                const fontSizeMm = Math.max(0.1, Number(overlay?.fontSizeMm) || 3.6);
+                const paddingMm = Math.max(0, Number(overlay?.paddingMm) || 1);
+                const widthGuess = Math.max(5, text.length * fontSizeMm * 0.55 + paddingMm * 2);
+                const heightGuess = Math.max(2, fontSizeMm * 1.2 + paddingMm * 2);
+                const bg = typeof overlay?.background === 'string' ? overlay.background : (typeof overlay?.backgroundColor === 'string' ? overlay.backgroundColor : '');
+                const fg = typeof overlay?.color === 'string' ? overlay.color : '#000000';
+                const fontFamily = typeof overlay?.font === 'string' && overlay.font.trim() ? overlay.font.trim() : 'Helvetica';
+                return (
+                  <Group key={idx} x={xMm} y={yMm} listening={false}>
+                    {bg ? <Rect x={0} y={0} width={widthGuess} height={heightGuess} fill={bg} opacity={0.92} /> : null}
+                    <KonvaText
+                      x={paddingMm}
+                      y={paddingMm}
+                      width={Math.max(0, widthGuess - paddingMm * 2)}
+                      height={Math.max(0, heightGuess - paddingMm * 2)}
+                      text={text}
+                      fontFamily={fontFamily}
+                      fontSize={fontSizeMm}
+                      fill={fg}
+                      verticalAlign="middle"
+                    />
+                  </Group>
+                );
+              })
+            : null}
+
+          <Rect x={0} y={0} width={stickerW} height={stickerH} cornerRadius={radiusMm} stroke="rgba(0,0,0,0.5)" strokeWidth={0.15} listening={false} />
 
           {showDebug ? (
             <>

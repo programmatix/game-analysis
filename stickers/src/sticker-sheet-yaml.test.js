@@ -11,14 +11,14 @@ test('buildStickerSheetYamlConfig: builds a sample-1 config with N stickers', ()
     sheetMarginMm: 8,
     gutterMm: 4,
     stickerWidthMm: 70,
-    stickerHeightMm: 25,
+    topStickerHeightMm: 25,
+    frontStickerHeightMm: 40,
     cornerRadiusMm: 2,
     columns: 2,
-    rows: 5,
     count: 10,
     sampleNumber: 1,
     sample1Logo: path.join(__dirname, '..', 'assets', 'logo.png'),
-    sample1Art: path.join(__dirname, '..', 'assets', 'cyclops', 'image.png'),
+    sample1Art: path.join(__dirname, '..', 'assets', 'sample', 'image.png'),
     sample1Gradient: '#f7d117',
     sample1GradientWidthMm: 34,
     sample1LogoOffsetXMm: 0,
@@ -30,10 +30,13 @@ test('buildStickerSheetYamlConfig: builds a sample-1 config with N stickers', ()
     sample1ArtScale: 1,
   });
 
-  assert.equal(cfg.version, 1);
+  assert.equal(cfg.version, 2);
   assert.equal(cfg.sheet.stickerWidthMm, 70);
+  assert.equal(cfg.sheet.topStickerHeightMm, 25);
+  assert.equal(cfg.sheet.frontStickerHeightMm, 40);
   assert.equal(cfg.stickers.length, 10);
-  assert.equal(cfg.defaults.design, 'sample1');
+  assert.equal(cfg.stickers[0].kind, 'top');
+  assert.equal(cfg.stickers[1].kind, 'front');
   assert.equal(cfg.defaults.gradient, '#f7d117');
   assert.equal(cfg.defaults.artScale, 1);
 });

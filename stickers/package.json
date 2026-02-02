@@ -1,0 +1,34 @@
+{
+  "name": "deckbox-stickers",
+  "version": "1.0.0",
+  "description": "Generic tools to edit and render printable deck-box sticker PDFs.",
+  "bin": {
+    "deckbox-sticker-samples": "src/sticker-samples-cli.js",
+    "deckbox-sticker-sheet-template": "src/sticker-sheet-template-cli.js",
+    "deckbox-sticker-sheet": "src/sticker-sheet-cli.js",
+    "deckbox-sticker-sheet-ui": "src/sticker-sheet-ui-cli.js"
+  },
+  "type": "commonjs",
+  "scripts": {
+    "sticker-sheet-ui": "node src/sticker-sheet-ui-cli.js",
+    "sticker-sheet-ui:build": "vite build sticker-sheet-ui --config sticker-sheet-ui/vite.config.js",
+    "test": "node --test \"src/*.test.js\""
+  },
+  "dependencies": {
+    "@pdf-lib/fontkit": "^1.1.1",
+    "commander": "^14.0.2",
+    "pdf-lib": "^1.17.1",
+    "yaml": "^2.8.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^5.0.2",
+    "konva": "^9.3.22",
+    "open": "^10.2.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-konva": "^18.2.10",
+    "use-image": "^1.1.1",
+    "vite": "^6.0.11"
+  }
+}
+

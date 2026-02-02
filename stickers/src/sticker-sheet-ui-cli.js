@@ -6,8 +6,8 @@ const { Command } = require('commander');
 async function main() {
   const program = new Command();
   program
-    .name('marvel-sticker-sheet-ui')
-    .description('Interactive UI for editing marvel-sticker-sheet YAML configs')
+    .name('deckbox-sticker-sheet-ui')
+    .description('Interactive UI for editing deckbox-sticker-sheet YAML configs')
     .option('--yaml <file>', 'YAML config path to load on startup', '')
     .option('--host <host>', 'Host to bind (default: localhost)', 'localhost')
     .option('--port <number>', 'Port to bind', '5173')
@@ -27,10 +27,10 @@ async function main() {
     }
   }
 
-  const marvelRoot = path.resolve(__dirname, '..');
-  process.chdir(marvelRoot);
+  const toolRoot = path.resolve(__dirname, '..');
+  process.chdir(toolRoot);
 
-  const uiRoot = path.resolve(marvelRoot, 'sticker-sheet-ui');
+  const uiRoot = path.resolve(toolRoot, 'sticker-sheet-ui');
   const { createServer } = await import('vite');
   const open = (await import('open')).default;
 
@@ -71,7 +71,7 @@ async function main() {
 
 function fsApiPlugin({ yamlPath }) {
   return {
-    name: 'marvel-sticker-sheet-ui-fs-api',
+    name: 'deckbox-sticker-sheet-ui-fs-api',
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
         try {

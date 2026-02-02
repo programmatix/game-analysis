@@ -7,7 +7,7 @@ const { buildStickerSheetPdf } = require('./sticker-sheet-pdf');
 
 test('buildStickerSheetPdf: generates a valid 1-page PDF from a config object', async () => {
   const logo = path.join(__dirname, '..', 'assets', 'logo.png');
-  const art = path.join(__dirname, '..', 'assets', 'cyclops', 'image.png');
+  const art = path.join(__dirname, '..', 'assets', 'sample', 'image.png');
 
   const { pdfBytes, sheet } = await buildStickerSheetPdf(
     {
@@ -32,11 +32,37 @@ test('buildStickerSheetPdf: generates a valid 1-page PDF from a config object', 
       },
       stickers: [
         {
+          kind: 'top',
           design: 'sample1',
           logo,
           art,
           gradient: '#f7d117',
           gradientWidthMm: 34,
+          logoOffsetXMm: 0,
+          logoOffsetYMm: 0,
+          logoMaxWidthMm: 28,
+          logoMaxHeightMm: 18,
+          artOffsetXMm: 0,
+          artOffsetYMm: 0,
+          artScale: 1.2,
+          textOverlays: [
+            {
+              text: 'Sample',
+              xMm: 42,
+              yMm: 3,
+              font: 'Helvetica-Bold',
+              fontSizeMm: 3.6,
+              color: '#000000',
+              background: '#ffffff',
+              paddingMm: 1,
+              align: 'left',
+            },
+          ],
+        },
+        {
+          kind: 'front',
+          logo,
+          art,
           logoOffsetXMm: 0,
           logoOffsetYMm: 0,
           logoMaxWidthMm: 28,
@@ -56,6 +82,6 @@ test('buildStickerSheetPdf: generates a valid 1-page PDF from a config object', 
   const doc = await PDFDocument.load(pdfBytes);
   assert.equal(doc.getPageCount(), 1);
   assert.equal(sheet.columns, 2);
-  assert.equal(sheet.rows, 5);
-  assert.equal(sheet.stickers, 1);
+  assert.equal(sheet.pages, 1);
+  assert.equal(sheet.stickers, 2);
 });

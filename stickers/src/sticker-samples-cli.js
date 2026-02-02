@@ -6,13 +6,13 @@ const YAML = require('yaml');
 const { buildStickerSampleSheetPdf } = require('./sticker-samples-pdf');
 const { buildStickerSheetYamlConfig } = require('./sticker-sheet-yaml');
 
-const DEFAULT_SAMPLE_1_LOGO = '/home/grahamp/dev/game-decks/marvel/assets/storm/logo.png';
-const DEFAULT_SAMPLE_1_ART = '/home/grahamp/dev/game-decks/marvel/assets/storm/image2.png';
+const DEFAULT_SAMPLE_1_LOGO = 'assets/logo.png';
+const DEFAULT_SAMPLE_1_ART = 'assets/sample/image.png';
 
 async function main() {
   const program = new Command();
   program
-    .name('marvel-sticker-samples')
+    .name('deckbox-sticker-samples')
     .description('Generate a 1-page sample sheet of deck-box sticker designs (10 slots; first slot filled)')
     .option('--format <pdf|yaml>', 'Output format (pdf writes a PDF file; yaml writes YAML to stdout)', 'pdf')
     .option('--yaml-sample <number>', 'When --format yaml: which sample number to emit (1-based)', '1')
@@ -121,10 +121,10 @@ async function main() {
       sheetMarginMm: numbers.sheetMarginMm,
       gutterMm: numbers.gutterMm,
       stickerWidthMm: numbers.stickerWidthMm,
-      stickerHeightMm: numbers.stickerHeightMm,
+      topStickerHeightMm: numbers.stickerHeightMm,
+      frontStickerHeightMm: Math.max(numbers.stickerHeightMm + 15, numbers.stickerHeightMm * 1.6),
       cornerRadiusMm: numbers.cornerRadiusMm,
       columns: numbers.columns,
-      rows: numbers.rows,
       count: numbers.count,
       sampleNumber: yamlSample,
       sample1Logo,

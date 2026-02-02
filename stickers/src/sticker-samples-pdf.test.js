@@ -6,7 +6,7 @@ const { buildStickerSampleSheetPdf } = require('./sticker-samples-pdf');
 
 test('buildStickerSampleSheetPdf builds a 10-slot sheet and returns PDF bytes', async () => {
   const logo = path.join(__dirname, '..', 'assets', 'logo.png');
-  const art = path.join(__dirname, '..', 'assets', 'cyclops', 'image.png');
+  const art = path.join(__dirname, '..', 'assets', 'sample', 'image.png');
 
   const { pdfBytes, sheet } = await buildStickerSampleSheetPdf({
     pageSize: 'a4',

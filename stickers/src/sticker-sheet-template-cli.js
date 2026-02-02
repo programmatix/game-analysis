@@ -3,21 +3,22 @@ const { Command } = require('commander');
 const YAML = require('yaml');
 const { buildStickerSheetYamlConfig } = require('./sticker-sheet-yaml');
 
-const DEFAULT_LOGO = '/home/grahamp/dev/game-decks/marvel/assets/storm/logo.png';
-const DEFAULT_ART = '/home/grahamp/dev/game-decks/marvel/assets/storm/image2.png';
+const DEFAULT_LOGO = 'assets/logo.png';
+const DEFAULT_ART = 'assets/sample/image.png';
 
 async function main() {
   const program = new Command();
   program
-    .name('marvel-sticker-sheet-template')
+    .name('deckbox-sticker-sheet-template')
     .description('Print a starter sticker-sheet YAML config to stdout')
     .option('--count <number>', 'Number of sticker entries to include', '10')
     .option('--page-size <a4|letter>', 'Page size', 'a4')
     .option('--orientation <auto|portrait|landscape>', 'Orientation selection', 'auto')
     .option('--columns <number>', 'Grid columns', '2')
-    .option('--rows <number>', 'Grid rows', '5')
     .option('--sticker-width-mm <number>', 'Sticker width in millimetres', '70')
-    .option('--sticker-height-mm <number>', 'Sticker height in millimetres', '25')
+    .option('--top-sticker-height-mm <number>', 'Top sticker height in millimetres', '25')
+    .option('--front-sticker-height-mm <number>', 'Front sticker height in millimetres', '40')
+    .option('--sticker-height-mm <number>', 'DEPRECATED: use --top-sticker-height-mm', '')
     .option('--logo <file>', 'Default logo path for stickers', DEFAULT_LOGO)
     .option('--art <file>', 'Sample art path for the first sticker', DEFAULT_ART)
     .parse(process.argv);
@@ -31,10 +32,10 @@ async function main() {
     sheetMarginMm: 8,
     gutterMm: 4,
     stickerWidthMm: Number(opts.stickerWidthMm) || 70,
-    stickerHeightMm: Number(opts.stickerHeightMm) || 25,
+    topStickerHeightMm: Number(opts.topStickerHeightMm || opts.stickerHeightMm) || 25,
+    frontStickerHeightMm: Number(opts.frontStickerHeightMm) || 40,
     cornerRadiusMm: 2,
     columns: clampInt(opts.columns, { min: 1, max: 10 }),
-    rows: clampInt(opts.rows, { min: 1, max: 40 }),
     count,
     sampleNumber: 1,
     sample1Logo: String(opts.logo || '').trim(),
