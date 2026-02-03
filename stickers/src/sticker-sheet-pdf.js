@@ -4,6 +4,8 @@ const { PDFDocument, StandardFonts, rgb, pushGraphicsState, popGraphicsState, mo
 const { MM_TO_PT, mmToPt } = require('../../shared/pdf-layout');
 const { applyRoundedRectClip, restoreGraphicsState } = require('../../shared/pdf-drawing');
 const { embedImage } = require('./image-utils');
+const { computeLogoBoxRectMm } = require('./logo-layout');
+const { computePackedStickerPagesMm: computePackedStickerPagesMmShared } = require('./sticker-sheet-layout');
 
 const PDF_OPS = {
   pushGraphicsState,
@@ -53,7 +55,7 @@ async function buildStickerSheetPdf(config, { debug } = {}) {
       if (debug) drawDebugGuidesForStickerMm(page, slot.rectMm, config);
     }
 
-    drawPageEdgeCutMarksMm(page, { pageWidthMm, pageHeightMm });
+    drawStickerEdgeCutMarksMm(page, packed.stickers.map(s => s.rectMm), { pageWidthMm, pageHeightMm });
   }
 
   const pdfBytes = await pdfDoc.save({ useObjectStreams: false });
@@ -71,90 +73,8 @@ async function buildStickerSheetPdf(config, { debug } = {}) {
 }
 
 function computePackedStickerPagesMm(config, { pageWidthMm, pageHeightMm, stickerWidthMm, topStickerHeightMm, frontStickerHeightMm }) {
-  const sheet = config.sheet;
-  const columns = clampInt(sheet.columns ?? 2, { min: 1, max: 20 });
-  const marginMm = Number(sheet.marginMm) || 0;
-  const gutterMm = Number(sheet.gutterMm) || 0;
-
-  const usableW = pageWidthMm - marginMm * 2;
-  const usableH = pageHeightMm - marginMm * 2;
-
-  const gridW = stickerWidthMm * columns + gutterMm * (columns - 1);
-  const originX = marginMm + (usableW - gridW) / 2;
-  const xByCol = Array.from({ length: columns }, (_, c) => originX + c * (stickerWidthMm + gutterMm));
-
-  function heightForSticker(sticker) {
-    const kind = String(sticker?.kind || 'top').trim().toLowerCase();
-    return kind === 'front' ? frontStickerHeightMm : topStickerHeightMm;
-  }
-
-  function shouldRenderSticker(sticker) {
-    if (!sticker || typeof sticker !== 'object') return false;
-    if (sticker.logo || sticker.art) return true;
-    if (Array.isArray(sticker.textOverlays) && sticker.textOverlays.some(o => o && typeof o === 'object' && String(o.text || '').trim())) return true;
-    return false;
-  }
-
-  const stickers = Array.isArray(config.stickers) ? config.stickers : [];
-  const pages = [];
-
-  let current = [];
-  let yCursorTop = Array(columns).fill(pageHeightMm - marginMm);
-
-  function startNewPage() {
-    if (current.length) pages.push({ stickers: current });
-    current = [];
-    yCursorTop = Array(columns).fill(pageHeightMm - marginMm);
-  }
-
-  for (const sticker of stickers) {
-    if (!shouldRenderSticker(sticker)) continue;
-
-    const h = heightForSticker(sticker);
-    if (h > usableH + 1e-6) {
-      throw new Error(`Sticker height ${h}mm is too tall for the page's usable height (${usableH}mm).`);
-    }
-
-    let bestCol = -1;
-    let bestRemaining = Infinity;
-    for (let col = 0; col < columns; col++) {
-      const yTop = yCursorTop[col];
-      const y = yTop - h;
-      const remaining = y - marginMm;
-      if (remaining < -1e-6) continue;
-      if (remaining < bestRemaining) {
-        bestRemaining = remaining;
-        bestCol = col;
-      }
-    }
-
-    if (bestCol === -1) {
-      startNewPage();
-
-      // Always fits after new page (we already checked h <= usableH).
-      const yTop = yCursorTop[0];
-      const y = yTop - h;
-      current.push({
-        rectMm: { x: xByCol[0], y, width: stickerWidthMm, height: h },
-        sticker,
-      });
-      yCursorTop[0] = y - gutterMm;
-      continue;
-    }
-
-    const yTop = yCursorTop[bestCol];
-    const y = yTop - h;
-    current.push({
-      rectMm: { x: xByCol[bestCol], y, width: stickerWidthMm, height: h },
-      sticker,
-    });
-    yCursorTop[bestCol] = y - gutterMm;
-  }
-
-  if (current.length) pages.push({ stickers: current });
-  if (pages.length === 0) pages.push({ stickers: [] });
-
-  return pages;
+  // Kept for backward compatibility of internal callers; implementation moved to ./sticker-sheet-layout.
+  return computePackedStickerPagesMmShared(config, { pageWidthMm, pageHeightMm, stickerWidthMm, topStickerHeightMm, frontStickerHeightMm });
 }
 
 async function drawSticker(page, pdfDoc, imageCache, fontCache, rectMm, sticker, { cornerRadiusMm }) {
@@ -194,7 +114,6 @@ async function drawTopSticker(page, rectMm, { embeddedLogo, embeddedArt }, cfg) 
       color: cfg.gradient,
       widthMm: Math.max(0, Number(cfg.gradientWidthMm) || 0),
       solidWidthMm: 20,
-      steps: 42,
     });
   });
 
@@ -222,23 +141,8 @@ async function drawFrontSticker(page, rectMm, { embeddedLogo, embeddedArt }, cfg
 
 function drawLogoMm(page, safeRectMm, embeddedLogo, cfg) {
   if (!embeddedLogo) return;
-
-  const logoAreaWidthMm = Math.min(safeRectMm.width * 0.45, Number(cfg.logoMaxWidthMm) + 6);
-  const logoArea = {
-    x: safeRectMm.x,
-    y: safeRectMm.y,
-    width: logoAreaWidthMm,
-    height: safeRectMm.height,
-  };
-
-  const target = {
-    x: logoArea.x + (Number(cfg.logoOffsetXMm) || 0),
-    y: logoArea.y + (Number(cfg.logoOffsetYMm) || 0),
-    width: Math.min((Number(cfg.logoMaxWidthMm) || 28) * (Number(cfg.logoScale) || 1), logoArea.width),
-    height: Math.min((Number(cfg.logoMaxHeightMm) || 18) * (Number(cfg.logoScale) || 1), logoArea.height),
-  };
-
-  drawImageContainMm(page, embeddedLogo, target, { opacity: 0.98 });
+  const { box } = computeLogoBoxRectMm(safeRectMm, cfg, { areaFraction: 0.45, paddingMm: 6 });
+  drawImageContainMm(page, embeddedLogo, box, { opacity: 0.98, scale: Number(cfg.logoScale) || 1 });
 }
 
 async function drawTopTextOverlaysMm(page, pdfDoc, fontCache, rectMm, sticker, { cornerRadiusMm }) {
@@ -377,7 +281,9 @@ function drawGradientLeftMm(page, rectMm, { color, widthMm, steps, solidWidthMm 
   }
   const fadeWidth = maxWidth - solid;
   if (fadeWidth <= 0) return;
-  const n = clampInt(steps ?? 40, { min: 2, max: 200 });
+  // Increase stripes to reduce banding while keeping PDF size reasonable.
+  const autoSteps = Math.ceil(fadeWidth * 10);
+  const n = clampInt(steps ?? autoSteps, { min: 60, max: 400 });
   const stripe = fadeWidth / n;
 
   for (let i = 0; i < n; i++) {
@@ -422,7 +328,7 @@ function drawDebugGuidesForStickerMm(page, rectMm, config) {
   }
 }
 
-function drawPageEdgeCutMarksMm(page, { pageWidthMm, pageHeightMm } = {}) {
+function drawStickerEdgeCutMarksMm(page, stickerRectsMm, { pageWidthMm, pageHeightMm } = {}) {
   const insetMm = 0.7;
   const lenMm = 7;
   const tPt = 0.7;
@@ -433,18 +339,59 @@ function drawPageEdgeCutMarksMm(page, { pageWidthMm, pageHeightMm } = {}) {
   const bottom = insetMm;
   const top = pageHeightMm - insetMm;
 
-  // Top-left
-  page.drawLine({ start: { x: mmToPtCoord(left), y: mmToPtCoord(top) }, end: { x: mmToPtCoord(left + lenMm), y: mmToPtCoord(top) }, color: black, thickness: tPt });
-  page.drawLine({ start: { x: mmToPtCoord(left), y: mmToPtCoord(top) }, end: { x: mmToPtCoord(left), y: mmToPtCoord(top - lenMm) }, color: black, thickness: tPt });
-  // Top-right
-  page.drawLine({ start: { x: mmToPtCoord(right), y: mmToPtCoord(top) }, end: { x: mmToPtCoord(right - lenMm), y: mmToPtCoord(top) }, color: black, thickness: tPt });
-  page.drawLine({ start: { x: mmToPtCoord(right), y: mmToPtCoord(top) }, end: { x: mmToPtCoord(right), y: mmToPtCoord(top - lenMm) }, color: black, thickness: tPt });
-  // Bottom-left
-  page.drawLine({ start: { x: mmToPtCoord(left), y: mmToPtCoord(bottom) }, end: { x: mmToPtCoord(left + lenMm), y: mmToPtCoord(bottom) }, color: black, thickness: tPt });
-  page.drawLine({ start: { x: mmToPtCoord(left), y: mmToPtCoord(bottom) }, end: { x: mmToPtCoord(left), y: mmToPtCoord(bottom + lenMm) }, color: black, thickness: tPt });
-  // Bottom-right
-  page.drawLine({ start: { x: mmToPtCoord(right), y: mmToPtCoord(bottom) }, end: { x: mmToPtCoord(right - lenMm), y: mmToPtCoord(bottom) }, color: black, thickness: tPt });
-  page.drawLine({ start: { x: mmToPtCoord(right), y: mmToPtCoord(bottom) }, end: { x: mmToPtCoord(right), y: mmToPtCoord(bottom + lenMm) }, color: black, thickness: tPt });
+  const xs = new Set();
+  const ys = new Set();
+
+  const rects = Array.isArray(stickerRectsMm) ? stickerRectsMm : [];
+  for (const r of rects) {
+    if (!r) continue;
+    const x1 = Number(r.x);
+    const x2 = Number(r.x) + Number(r.width);
+    const y1 = Number(r.y);
+    const y2 = Number(r.y) + Number(r.height);
+    if (Number.isFinite(x1)) xs.add(roundCoordMm(x1));
+    if (Number.isFinite(x2)) xs.add(roundCoordMm(x2));
+    if (Number.isFinite(y1)) ys.add(roundCoordMm(y1));
+    if (Number.isFinite(y2)) ys.add(roundCoordMm(y2));
+  }
+
+  // Always include page corners as a reference.
+  xs.add(roundCoordMm(left));
+  xs.add(roundCoordMm(right));
+  ys.add(roundCoordMm(bottom));
+  ys.add(roundCoordMm(top));
+
+  // Any vertical sticker edge -> tick at top/bottom page edges.
+  for (const x of xs) {
+    page.drawLine({
+      start: { x: mmToPtCoord(x), y: mmToPtCoord(top) },
+      end: { x: mmToPtCoord(x), y: mmToPtCoord(top - lenMm) },
+      color: black,
+      thickness: tPt,
+    });
+    page.drawLine({
+      start: { x: mmToPtCoord(x), y: mmToPtCoord(bottom) },
+      end: { x: mmToPtCoord(x), y: mmToPtCoord(bottom + lenMm) },
+      color: black,
+      thickness: tPt,
+    });
+  }
+
+  // Any horizontal sticker edge -> tick at left/right page edges.
+  for (const y of ys) {
+    page.drawLine({
+      start: { x: mmToPtCoord(left), y: mmToPtCoord(y) },
+      end: { x: mmToPtCoord(left + lenMm), y: mmToPtCoord(y) },
+      color: black,
+      thickness: tPt,
+    });
+    page.drawLine({
+      start: { x: mmToPtCoord(right), y: mmToPtCoord(y) },
+      end: { x: mmToPtCoord(right - lenMm), y: mmToPtCoord(y) },
+      color: black,
+      thickness: tPt,
+    });
+  }
 }
 
 async function withClipRoundedRectMm(page, rectMm, radiusMm, fn) {
@@ -472,7 +419,8 @@ function drawImageCoverMm(page, embeddedImage, rectMm, { opacity = 1, offsetsMm,
   const offsetX = Number(offsetsMm?.x) || 0;
   const offsetY = Number(offsetsMm?.y) || 0;
   const x = rectMm.x + (targetW - drawW) / 2 + offsetX;
-  const y = rectMm.y + (targetH - drawH) / 2 + offsetY;
+  // UI offsets are +Y "down"; PDF coordinates are +Y "up".
+  const y = rectMm.y + (targetH - drawH) / 2 - offsetY;
 
   page.drawImage(embeddedImage, {
     x: mmToPtCoord(x),
@@ -483,15 +431,27 @@ function drawImageCoverMm(page, embeddedImage, rectMm, { opacity = 1, offsetsMm,
   });
 }
 
-function drawImageContainMm(page, embeddedImage, rectMm, { opacity = 1 } = {}) {
+function drawImageContainMm(page, embeddedImage, rectMm, { opacity = 1, scale = 1, offsetsMm } = {}) {
   const { width, height } = embeddedImage.scale(1);
   const imgW = ptToMm(width);
   const imgH = ptToMm(height);
-  const scale = Math.min(rectMm.width / imgW, rectMm.height / imgH);
-  const drawW = imgW * scale;
-  const drawH = imgH * scale;
-  const x = rectMm.x + (rectMm.width - drawW) / 2;
-  const y = rectMm.y + (rectMm.height - drawH) / 2;
+  const base = Math.min(rectMm.width / imgW, rectMm.height / imgH);
+  const effectiveScale = base * (Number(scale) || 1);
+  const drawW = imgW * effectiveScale;
+  const drawH = imgH * effectiveScale;
+  const offsetX = Number(offsetsMm?.x) || 0;
+  const offsetY = Number(offsetsMm?.y) || 0;
+  const x = rectMm.x + (rectMm.width - drawW) / 2 + offsetX;
+  // UI offsets are +Y "down"; PDF coordinates are +Y "up".
+  const y = rectMm.y + (rectMm.height - drawH) / 2 - offsetY;
+
+  applyRoundedRectClip(page, PDF_OPS, {
+    x: mmToPtCoord(rectMm.x),
+    y: mmToPtCoord(rectMm.y),
+    width: mmToPt(rectMm.width),
+    height: mmToPt(rectMm.height),
+    radius: 0,
+  });
 
   page.drawImage(embeddedImage, {
     x: mmToPtCoord(x),
@@ -500,6 +460,8 @@ function drawImageContainMm(page, embeddedImage, rectMm, { opacity = 1 } = {}) {
     height: mmToPt(drawH),
     opacity,
   });
+
+  restoreGraphicsState(page, PDF_OPS);
 }
 
 function drawRectMm(page, rectMm, { color, opacity } = {}) {
@@ -547,6 +509,10 @@ function ptToMm(pt) {
 
 function mmToPtCoord(mm) {
   return Number(mm) * MM_TO_PT;
+}
+
+function roundCoordMm(mm) {
+  return Math.round(Number(mm) * 100) / 100;
 }
 
 module.exports = {

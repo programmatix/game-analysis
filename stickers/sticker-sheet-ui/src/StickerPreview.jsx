@@ -48,6 +48,17 @@ function computeContainRectMm(imgW, imgH, targetW, targetH) {
   return { x, y, width, height };
 }
 
+function computeContainRectMmScaled(imgW, imgH, targetW, targetH, scaleFactor, offsetX, offsetY) {
+  if (!imgW || !imgH) return { x: 0, y: 0, width: 0, height: 0 };
+  const base = Math.min(targetW / imgW, targetH / imgH);
+  const scale = base * (Number(scaleFactor) || 1);
+  const width = imgW * scale;
+  const height = imgH * scale;
+  const x = (targetW - width) / 2 + (Number(offsetX) || 0);
+  const y = (targetH - height) / 2 + (Number(offsetY) || 0);
+  return { x, y, width, height };
+}
+
 function rgbToHex(r, g, b) {
   const clamp = n => Math.max(0, Math.min(255, Math.round(Number(n) || 0)));
   const to2 = n => clamp(n).toString(16).padStart(2, '0');
@@ -103,22 +114,24 @@ export default function StickerPreview({
 
   const paddingMm = 1.2;
   const safeRect = { x: paddingMm, y: paddingMm, width: stickerW - paddingMm * 2, height: stickerH - paddingMm * 2 };
-  const logoAreaWidthMm = Math.min(safeRect.width * 0.45, (Number(sticker.logoMaxWidthMm) || 28) + 6);
+  const logoMaxWidthMm = Math.max(0, Number(sticker.logoMaxWidthMm) || 28);
+  const logoMaxHeightMm = Math.max(0, Number(sticker.logoMaxHeightMm) || 18);
+  const logoAreaWidthMm = Math.min(safeRect.width * 0.45, logoMaxWidthMm + 6);
   const logoArea = { x: safeRect.x, y: safeRect.y, width: logoAreaWidthMm, height: safeRect.height };
-  const logoScale = Math.max(0.1, Number(sticker.logoScale) || 1);
-  const logoTarget = {
+  const logoBox = {
     x: logoArea.x + (Number(sticker.logoOffsetXMm) || 0),
     y: logoArea.y + (Number(sticker.logoOffsetYMm) || 0),
-    width: Math.min((Number(sticker.logoMaxWidthMm) || 28) * logoScale, logoArea.width),
-    height: Math.min((Number(sticker.logoMaxHeightMm) || 18) * logoScale, logoArea.height),
+    width: Math.max(0, Math.min(logoMaxWidthMm, logoArea.width)),
+    height: Math.max(0, Math.min(logoMaxHeightMm, logoArea.height)),
   };
 
-  const baseLogoTarget = { ...logoTarget, x: logoArea.x, y: logoArea.y };
+  const baseLogoBox = { ...logoBox, x: logoArea.x, y: logoArea.y };
+  const logoScale = Math.max(0.1, Number(sticker.logoScale) || 1);
 
   const logoContain = useMemo(() => {
     if (!logoImg) return null;
-    return computeContainRectMm(logoImg.naturalWidth, logoImg.naturalHeight, logoTarget.width, logoTarget.height);
-  }, [logoImg, logoTarget.width, logoTarget.height]);
+    return computeContainRectMmScaled(logoImg.naturalWidth, logoImg.naturalHeight, logoBox.width, logoBox.height, logoScale, 0, 0);
+  }, [logoImg, logoBox.width, logoBox.height, logoScale]);
 
   const gradientWidthMm = Math.max(0, Math.min(Number(sticker.gradientWidthMm) || 0, stickerW));
   const gradientSolidMm = Math.max(0, Math.min(20, gradientWidthMm));
@@ -202,25 +215,25 @@ export default function StickerPreview({
                 ) : null}
               </>
             ) : null}
-          </Group>
 
-          {logoImg && logoContain ? (
-            <Group
-              x={logoTarget.x}
-              y={logoTarget.y}
-              draggable
-              onDragEnd={e => {
-                const node = e.target;
-                onLogoMove?.({
-                  logoOffsetXMm: node.x() - baseLogoTarget.x,
-                  logoOffsetYMm: node.y() - baseLogoTarget.y,
-                });
-              }}
-            >
-              <Rect x={0} y={0} width={logoTarget.width} height={logoTarget.height} fill="rgba(0,0,0,0.01)" />
-              <KonvaImage image={logoImg} x={logoContain.x} y={logoContain.y} width={logoContain.width} height={logoContain.height} opacity={0.98} listening={false} />
-            </Group>
-          ) : null}
+            {logoImg && logoContain ? (
+              <Group
+                x={logoBox.x}
+                y={logoBox.y}
+                draggable
+                onDragEnd={e => {
+                  const node = e.target;
+                  onLogoMove?.({
+                    logoOffsetXMm: node.x() - baseLogoBox.x,
+                    logoOffsetYMm: node.y() - baseLogoBox.y,
+                  });
+                }}
+              >
+                <Rect x={0} y={0} width={logoBox.width} height={logoBox.height} fill="rgba(0,0,0,0.01)" />
+                <KonvaImage image={logoImg} x={logoContain.x} y={logoContain.y} width={logoContain.width} height={logoContain.height} opacity={0.98} listening={false} />
+              </Group>
+            ) : null}
+          </Group>
 
           {stickerKind === 'top'
             ? (Array.isArray(sticker?.textOverlays) ? sticker.textOverlays : []).map((overlay, idx) => {

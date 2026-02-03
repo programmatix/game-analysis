@@ -4,15 +4,17 @@ const path = require('path');
 const { Command } = require('commander');
 const YAML = require('yaml');
 const { buildStickerSheetPdf } = require('./sticker-sheet-pdf');
+const { renderStickerSheetPng } = require('./sticker-sheet-image');
 
 async function main() {
   const program = new Command();
   program
     .name('deckbox-sticker-sheet')
-    .description('Generate a printable sticker sheet PDF from a YAML config')
+    .description('Generate a printable sticker sheet from a YAML config (PDF or PNG)')
     .requiredOption('--input <file>', 'Input YAML file path (use - for stdin)')
     .option('--debug', 'Enable debug guidelines (uses YAML debug settings)', false)
-    .option('-o, --output <file>', 'Output PDF path', '')
+    .option('--px-per-mm <number>', 'PNG output resolution (pixels per mm). Default: 12 (~300dpi)', '12')
+    .option('-o, --output <file>', 'Output path (defaults to sticker-sheet.pdf). Use .png to render an image.', '')
     .parse(process.argv);
 
   const opts = program.opts();
@@ -31,8 +33,17 @@ async function main() {
   }
 
   const outputPath = resolveOutputPath(opts.output);
-  const { pdfBytes, sheet } = await buildStickerSheetPdf(normalized, { debug: Boolean(opts.debug) });
+  const ext = path.extname(outputPath).toLowerCase();
 
+  if (ext === '.png') {
+    const pxPerMm = Number(opts.pxPerMm) || 12;
+    const { outputs, sheet } = await renderStickerSheetPng(normalized, { outputPath, pxPerMm, debug: normalized.debug });
+    for (const out of outputs) console.log(`Created ${out}`);
+    console.log(`Sheet: ${sheet.pageWidthMm}×${sheet.pageHeightMm}mm (${sheet.orientation}), ${sheet.pages} page(s), ${sheet.columns} column(s), ${sheet.stickers} sticker(s), ${sheet.pxPerMm}px/mm`);
+    return;
+  }
+
+  const { pdfBytes, sheet } = await buildStickerSheetPdf(normalized, { debug: Boolean(opts.debug) });
   await fs.promises.writeFile(outputPath, pdfBytes);
   console.log(`Created ${outputPath}`);
   console.log(`Sheet: ${sheet.pageWidthMm}×${sheet.pageHeightMm}mm (${sheet.orientation}), ${sheet.pages} page(s), ${sheet.columns} column(s), ${sheet.stickers} sticker(s)`);
@@ -57,8 +68,9 @@ async function readYamlInput(inputPath) {
 function resolveOutputPath(raw) {
   const trimmed = typeof raw === 'string' ? raw.trim() : '';
   if (trimmed) {
-    const hasPdf = /\.pdf$/i.test(trimmed);
-    return path.resolve(hasPdf ? trimmed : `${trimmed}.pdf`);
+    const ext = path.extname(trimmed).toLowerCase();
+    if (ext) return path.resolve(trimmed);
+    return path.resolve(`${trimmed}.pdf`);
   }
   return path.resolve('sticker-sheet.pdf');
 }
@@ -147,7 +159,8 @@ function dimsFor(base, orientation, marginMm, gridW, minH) {
 function pickAutoOrientation(portrait, landscape) {
   if (portrait.fits && !landscape.fits) return portrait;
   if (landscape.fits && !portrait.fits) return landscape;
-  if (portrait.fits && landscape.fits) return landscape.slack >= portrait.slack ? landscape : portrait;
+  // When both fit, prefer portrait for more predictable printing/layout.
+  if (portrait.fits && landscape.fits) return portrait;
   return landscape.slack >= portrait.slack ? landscape : portrait;
 }
 
@@ -193,6 +206,13 @@ function normalizeStickers(raw, defaults, errors, { baseDir } = {}) {
     const src = arr[i] && typeof arr[i] === 'object' ? arr[i] : {};
     const prefix = `stickers[${i}]`;
 
+    if (Object.prototype.hasOwnProperty.call(src, 'text')) {
+      errors.push(`${prefix}.text is not a supported field (use ${prefix}.textOverlays: [{ text: "...", xMm: 0, yMm: 0 }])`);
+    }
+    if (Object.prototype.hasOwnProperty.call(src, 'textOverlay')) {
+      errors.push(`${prefix}.textOverlay is not a supported field (use ${prefix}.textOverlays: [{ text: "...", xMm: 0, yMm: 0 }])`);
+    }
+
     const gradientRaw = src.gradient ?? src.yellow ?? defaults.gradient;
     const gradient = gradientRaw != null ? String(gradientRaw).trim() : '';
     if (gradient && !isHexColor(gradient)) errors.push(`${prefix}.gradient must be a 6-digit hex color like #f7d117`);
@@ -233,6 +253,10 @@ function normalizeStickers(raw, defaults, errors, { baseDir } = {}) {
 }
 
 function normalizeTextOverlays(label, raw, errors, { baseDir } = {}) {
+  if (raw != null && !Array.isArray(raw)) {
+    errors.push(`${label} must be an array`);
+    return [];
+  }
   const arr = Array.isArray(raw) ? raw : [];
   const out = [];
 

@@ -4,6 +4,7 @@ const { PDFDocument, StandardFonts, rgb, pushGraphicsState, popGraphicsState, mo
 const { MM_TO_PT, mmToPt } = require('../../shared/pdf-layout');
 const { applyRoundedRectClip, restoreGraphicsState } = require('../../shared/pdf-drawing');
 const { embedImage } = require('./image-utils');
+const { computeLogoBoxRectMm } = require('./logo-layout');
 
 const PDF_OPS = {
   pushGraphicsState,
@@ -118,27 +119,21 @@ function drawStickerSample1(page, rectMm, { embeddedLogo, embeddedArt }, sample1
       color: sample1.gradient,
       widthMm: Math.max(0, sample1.gradientWidthMm * scale),
       solidWidthMm: 20 * scale,
-      steps: 42,
     });
   });
 
   if (embeddedLogo) {
-    const logoAreaWidthMm = Math.min(safeRectMm.width * 0.45, (sample1.logoMaxWidthMm + 6) * scale);
-    const logoArea = {
-      x: safeRectMm.x,
-      y: safeRectMm.y,
-      width: logoAreaWidthMm,
-      height: safeRectMm.height,
-    };
-
-    const target = {
-      x: logoArea.x + sample1.logoOffsetXMm * scale,
-      y: logoArea.y + sample1.logoOffsetYMm * scale,
-      width: Math.min(sample1.logoMaxWidthMm * scale, logoArea.width),
-      height: Math.min(sample1.logoMaxHeightMm * scale, logoArea.height),
-    };
-
-    drawImageContainMm(page, embeddedLogo, target, { opacity: 0.98 });
+    const { box } = computeLogoBoxRectMm(
+      safeRectMm,
+      {
+        logoOffsetXMm: sample1.logoOffsetXMm * scale,
+        logoOffsetYMm: sample1.logoOffsetYMm * scale,
+        logoMaxWidthMm: sample1.logoMaxWidthMm * scale,
+        logoMaxHeightMm: sample1.logoMaxHeightMm * scale,
+      },
+      { areaFraction: 0.45, paddingMm: 6 * scale },
+    );
+    drawImageContainMm(page, embeddedLogo, box, { opacity: 0.98, scale: 1 });
   }
 }
 
@@ -151,7 +146,8 @@ function drawYellowGradientLeftMm(page, rectMm, { color, widthMm, steps, solidWi
   }
   const fadeWidth = maxWidth - solid;
   if (fadeWidth <= 0) return;
-  const n = clampInt(steps ?? 40, { min: 2, max: 200 });
+  const autoSteps = Math.ceil(fadeWidth * 10);
+  const n = clampInt(steps ?? autoSteps, { min: 60, max: 400 });
   const stripe = fadeWidth / n;
 
   for (let i = 0; i < n; i++) {
@@ -191,7 +187,7 @@ function drawImageCoverMm(page, embeddedImage, rectMm, { clipRadiusMm = 0, opaci
   const offsetX = Number(offsetsMm?.x) || 0;
   const offsetY = Number(offsetsMm?.y) || 0;
   const x = rectMm.x + (targetW - drawW) / 2 + offsetX;
-  const y = rectMm.y + (targetH - drawH) / 2 + offsetY;
+  const y = rectMm.y + (targetH - drawH) / 2 - offsetY;
 
   const clipRadiusPt = mmToPt(Math.max(0, Number(clipRadiusMm) || 0));
   applyRoundedRectClip(page, PDF_OPS, {
@@ -213,15 +209,27 @@ function drawImageCoverMm(page, embeddedImage, rectMm, { clipRadiusMm = 0, opaci
   restoreGraphicsState(page, PDF_OPS);
 }
 
-function drawImageContainMm(page, embeddedImage, rectMm, { opacity = 1 } = {}) {
+function drawImageContainMm(page, embeddedImage, rectMm, { opacity = 1, scale = 1, offsetsMm } = {}) {
   const { width, height } = embeddedImage.scale(1);
   const imgW = ptToMm(width);
   const imgH = ptToMm(height);
-  const scale = Math.min(rectMm.width / imgW, rectMm.height / imgH);
-  const drawW = imgW * scale;
-  const drawH = imgH * scale;
-  const x = rectMm.x + (rectMm.width - drawW) / 2;
-  const y = rectMm.y + (rectMm.height - drawH) / 2;
+  const base = Math.min(rectMm.width / imgW, rectMm.height / imgH);
+  const effectiveScale = base * (Number(scale) || 1);
+  const drawW = imgW * effectiveScale;
+  const drawH = imgH * effectiveScale;
+  const offsetX = Number(offsetsMm?.x) || 0;
+  const offsetY = Number(offsetsMm?.y) || 0;
+  const x = rectMm.x + (rectMm.width - drawW) / 2 + offsetX;
+  // UI offsets are +Y "down"; PDF coordinates are +Y "up".
+  const y = rectMm.y + (rectMm.height - drawH) / 2 - offsetY;
+
+  applyRoundedRectClip(page, PDF_OPS, {
+    x: mmToPtCoord(rectMm.x),
+    y: mmToPtCoord(rectMm.y),
+    width: mmToPt(rectMm.width),
+    height: mmToPt(rectMm.height),
+    radius: 0,
+  });
 
   page.drawImage(embeddedImage, {
     x: mmToPtCoord(x),
@@ -230,6 +238,8 @@ function drawImageContainMm(page, embeddedImage, rectMm, { opacity = 1 } = {}) {
     height: mmToPt(drawH),
     opacity,
   });
+
+  restoreGraphicsState(page, PDF_OPS);
 }
 
 function drawRectMm(page, rectMm, { color, opacity, borderColor, borderWidthPt } = {}) {
