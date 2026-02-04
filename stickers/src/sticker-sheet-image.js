@@ -392,28 +392,57 @@ function buildStickerSheetPageHtml({
               const overlayGroup = new Konva.Group({ x: Number(overlay.xMm) || 0, y: Number(overlay.yMm) || 0 });
               contentRoot.add(overlayGroup);
 
+              const align = String(overlay.align || 'left').trim().toLowerCase() || 'left';
               const fontSizeMm = Math.max(0.1, Number(overlay.fontSizeMm) || 3.6);
               const paddingMm2 = Math.max(0, Number(overlay.paddingMm) || 1);
-              const widthGuess = Math.max(5, text.length * fontSizeMm * 0.55 + paddingMm2 * 2);
-              const heightGuess = Math.max(2, fontSizeMm * 1.2 + paddingMm2 * 2);
               const bg2 = typeof overlay.background === 'string' ? overlay.background : (typeof overlay.backgroundColor === 'string' ? overlay.backgroundColor : '');
               const fg2 = typeof overlay.color === 'string' ? overlay.color : '#000000';
               const fontFamily = typeof overlay.__fontFamily === 'string' && overlay.__fontFamily.trim()
                 ? overlay.__fontFamily.trim()
                 : (typeof overlay.font === 'string' && overlay.font.trim() ? overlay.font.trim() : 'Helvetica');
 
-              if (bg2) overlayGroup.add(new Konva.Rect({ x: 0, y: 0, width: widthGuess, height: heightGuess, fill: bg2, opacity: 0.92 }));
-              overlayGroup.add(new Konva.Text({
-                x: paddingMm2,
-                y: paddingMm2,
-                width: Math.max(0, widthGuess - paddingMm2 * 2),
-                height: Math.max(0, heightGuess - paddingMm2 * 2),
+              const maxWidthMm = Math.max(0, contentW - (Number(overlay.xMm) || 0));
+              const availableWidthMm = Math.max(0, maxWidthMm - paddingMm2 * 2);
+
+              const textNode = new Konva.Text({
+                x: 0,
+                y: 0,
                 text,
                 fontFamily,
                 fontSize: fontSizeMm,
                 fill: fg2,
-                verticalAlign: 'middle',
-              }));
+                wrap: 'none',
+                listening: false,
+              });
+
+              function measureTextWidthMm() {
+                if (typeof textNode.getTextWidth === 'function') return Math.max(0, Number(textNode.getTextWidth()) || 0);
+                return Math.max(0, Number(textNode.width()) || 0);
+              }
+
+              if (availableWidthMm > 0) {
+                const measured = measureTextWidthMm();
+                if (measured > availableWidthMm && measured > 0) {
+                  const scaled = fontSizeMm * (availableWidthMm / measured);
+                  textNode.fontSize(Math.max(0.1, scaled));
+                }
+              }
+
+              const textWidthMm = measureTextWidthMm();
+              const textHeightMm = Math.max(0, Number(textNode.height()) || 0);
+              const boxW = Math.max(0, textWidthMm + paddingMm2 * 2);
+              const boxH = Math.max(0, textHeightMm + paddingMm2 * 2);
+
+              let boxX = 0;
+              if (maxWidthMm > 0) {
+                if (align === 'center') boxX = (maxWidthMm - boxW) / 2;
+                else if (align === 'right') boxX = maxWidthMm - boxW;
+              }
+              if (!Number.isFinite(boxX)) boxX = 0;
+
+              if (bg2) overlayGroup.add(new Konva.Rect({ x: boxX, y: 0, width: boxW, height: boxH, fill: bg2, opacity: 0.92, listening: false }));
+              textNode.position({ x: boxX + paddingMm2, y: paddingMm2 });
+              overlayGroup.add(textNode);
             }
           }
 

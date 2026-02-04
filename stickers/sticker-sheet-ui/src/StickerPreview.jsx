@@ -279,7 +279,7 @@ export default function StickerPreview({
       <Stage ref={stageRef} width={stageW} height={stageH} onPointerDown={handleStagePointerDown}>
       <Layer>
         <Group scaleX={pxPerMm} scaleY={pxPerMm}>
-          <Group x={cutMm} y={cutMm} listening={false}>
+          <Group x={cutMm} y={cutMm}>
             <Group clipFunc={ctx => clipRoundedRect(ctx, 0, 0, contentW, contentH, contentRadiusMm)}>
               <Rect x={0} y={0} width={contentW} height={contentH} fill={stickerKind === 'top' ? (sticker.gradient || '#f7d117') : '#ffffff'} />
               {artImg && artRect ? (
