@@ -171,9 +171,32 @@ async function drawTopTextOverlaysMm(page, pdfDoc, fontCache, rectMm, sticker, {
       const boxWidthPt = maxLineWidthPt + paddingPt * 2;
       const boxHeightPt = lines.length * lineHeightPt + paddingPt * 2;
 
-      const xPt = mmToPtCoord(rectMm.x + (Number(overlay.xMm) || 0));
-      const yTopPt = mmToPtCoord(rectMm.y + rectMm.height - (Number(overlay.yMm) || 0));
-      const yPt = yTopPt - boxHeightPt;
+      const xMm = Number(overlay.xMm) || 0;
+      const yMm = Number(overlay.yMm) || 0;
+
+      const wantsCenter = overlay.center === true
+        || overlay.centered === true
+        || String(overlay.anchor ?? '').trim().toLowerCase() === 'center';
+
+      const align = String(overlay.align ?? (wantsCenter ? 'center' : 'left')).trim().toLowerCase();
+      const vAlignRaw = overlay.valign ?? overlay.vAlign ?? overlay.verticalAlign ?? (wantsCenter ? 'middle' : 'top');
+      let valign = String(vAlignRaw || 'top').trim().toLowerCase() || 'top';
+      if (valign === 'center') valign = 'middle';
+
+      const availableWidthPt = mmToPt(Math.max(0, rectMm.width - xMm));
+      let xPt = mmToPtCoord(rectMm.x + xMm);
+      if (availableWidthPt > 0) {
+        if (align === 'center') xPt = mmToPtCoord(rectMm.x + xMm) + (availableWidthPt - boxWidthPt) / 2;
+        if (align === 'right') xPt = mmToPtCoord(rectMm.x + xMm) + (availableWidthPt - boxWidthPt);
+      }
+
+      const yTopPt = mmToPtCoord(rectMm.y + rectMm.height - yMm);
+      const availableHeightPt = mmToPt(Math.max(0, rectMm.height - yMm));
+      let yPt = yTopPt - boxHeightPt;
+      if (availableHeightPt > 0) {
+        if (valign === 'middle') yPt = mmToPtCoord(rectMm.y) + (availableHeightPt - boxHeightPt) / 2;
+        if (valign === 'bottom') yPt = mmToPtCoord(rectMm.y);
+      }
 
       const bgRaw = typeof overlay.background === 'string' ? overlay.background : (typeof overlay.backgroundColor === 'string' ? overlay.backgroundColor : '');
       if (bgRaw) {
@@ -182,7 +205,6 @@ async function drawTopTextOverlaysMm(page, pdfDoc, fontCache, rectMm, sticker, {
       }
 
       const fg = parseHexColor(overlay.color, rgb(0, 0, 0));
-      const align = String(overlay.align || 'left').trim().toLowerCase();
       const innerWidthPt = Math.max(0, boxWidthPt - paddingPt * 2);
 
       let cursorY = yPt + boxHeightPt - paddingPt - fontSizePt;

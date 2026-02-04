@@ -22,7 +22,9 @@ Generic tools for editing and printing deck-box stickers.
 - `sheet.stickerWidthMm` is shared by all stickers.
 - `sheet.topStickerHeightMm` / `sheet.frontStickerHeightMm` control heights for `stickers[].kind: top|front`.
 - `sheet.cutMarginMm` insets the printed sticker inside the cut grid (default: `1`). Set `0` to cut exactly on the sticker border.
-- Optional top text overlays: `stickers[].textOverlays` entries support `text`, `xMm`, `yMm`, `background`, `color`, `font` (standard PDF font names like `Helvetica-Bold`) and/or `fontPath` (TTF/OTF).
+- To disable the left gradient band on `kind: top`, set `stickers[].gradientWidthMm: 0` (or `stickers[].noGradient: true`).
+- Optional top text overlays: `stickers[].textOverlays` entries support `text`, `xMm`, `yMm`, `background`, `color`, `font` (standard PDF font names like `Helvetica-Bold`) and/or `fontPath` (TTF/OTF), plus `align` (`left|center|right`) and `valign` (`top|middle|bottom`).
+  - Shorthand: set `center: true` (or `anchor: center`) to center both horizontally and vertically.
   - For convenience, `font` may also be set to a `.ttf`/`.otf` path (it will be treated as `fontPath`).
 
 Example:

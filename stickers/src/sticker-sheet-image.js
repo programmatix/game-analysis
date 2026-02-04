@@ -392,7 +392,14 @@ function buildStickerSheetPageHtml({
               const overlayGroup = new Konva.Group({ x: Number(overlay.xMm) || 0, y: Number(overlay.yMm) || 0 });
               contentRoot.add(overlayGroup);
 
-              const align = String(overlay.align || 'left').trim().toLowerCase() || 'left';
+              const wantsCenter = overlay.center === true
+                || overlay.centered === true
+                || String(overlay.anchor ?? '').trim().toLowerCase() === 'center';
+
+              const align = String(overlay.align ?? (wantsCenter ? 'center' : 'left')).trim().toLowerCase() || 'left';
+              const vAlignRaw = overlay.valign ?? overlay.vAlign ?? overlay.verticalAlign ?? (wantsCenter ? 'middle' : 'top');
+              let valign = String(vAlignRaw || 'top').trim().toLowerCase() || 'top';
+              if (valign === 'center') valign = 'middle';
               const fontSizeMm = Math.max(0.1, Number(overlay.fontSizeMm) || 3.6);
               const paddingMm2 = Math.max(0, Number(overlay.paddingMm) || 1);
               const bg2 = typeof overlay.background === 'string' ? overlay.background : (typeof overlay.backgroundColor === 'string' ? overlay.backgroundColor : '');
@@ -403,6 +410,7 @@ function buildStickerSheetPageHtml({
 
               const maxWidthMm = Math.max(0, contentW - (Number(overlay.xMm) || 0));
               const availableWidthMm = Math.max(0, maxWidthMm - paddingMm2 * 2);
+              const maxHeightMm = Math.max(0, contentH - (Number(overlay.yMm) || 0));
 
               const textNode = new Konva.Text({
                 x: 0,
@@ -440,8 +448,15 @@ function buildStickerSheetPageHtml({
               }
               if (!Number.isFinite(boxX)) boxX = 0;
 
-              if (bg2) overlayGroup.add(new Konva.Rect({ x: boxX, y: 0, width: boxW, height: boxH, fill: bg2, opacity: 0.92, listening: false }));
-              textNode.position({ x: boxX + paddingMm2, y: paddingMm2 });
+              let boxY = 0;
+              if (maxHeightMm > 0) {
+                if (valign === 'middle') boxY = (maxHeightMm - boxH) / 2;
+                else if (valign === 'bottom') boxY = maxHeightMm - boxH;
+              }
+              if (!Number.isFinite(boxY)) boxY = 0;
+
+              if (bg2) overlayGroup.add(new Konva.Rect({ x: boxX, y: boxY, width: boxW, height: boxH, fill: bg2, opacity: 0.92, listening: false }));
+              textNode.position({ x: boxX + paddingMm2, y: boxY + paddingMm2 });
               overlayGroup.add(textNode);
             }
           }

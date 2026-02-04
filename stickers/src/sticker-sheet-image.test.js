@@ -99,7 +99,7 @@ test('renderStickerSheetPng: does not crop long centered overlay text', { skip: 
           artScale: 1,
           artOffsetXMm: 0,
           artOffsetYMm: 0,
-          textOverlays: [{ text: 'Magneto', xMm: 0, yMm: 3, font: 'Helvetica', fontSizeMm: 12, color: '#000000', align: 'center', paddingMm: 0 }],
+          textOverlays: [{ text: 'Magneto', xMm: 0, yMm: 3, font: 'Helvetica', fontSizeMm: 12, color: '#000000', center: true, paddingMm: 0 }],
         },
       ],
     };

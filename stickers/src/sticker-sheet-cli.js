@@ -226,6 +226,14 @@ function normalizeStickers(raw, defaults, errors, { baseDir } = {}) {
     const kind = String(src.kind || '').trim().toLowerCase() || 'top';
     if (!['top', 'front'].includes(kind)) errors.push(`${prefix}.kind must be "top" or "front"`);
 
+    const disableGradient = src.noGradient === true || src.disableGradient === true;
+    if (src.noGradient != null && src.noGradient !== true && src.noGradient !== false) {
+      errors.push(`${prefix}.noGradient must be a boolean`);
+    }
+    if (src.disableGradient != null && src.disableGradient !== true && src.disableGradient !== false) {
+      errors.push(`${prefix}.disableGradient must be a boolean`);
+    }
+
     const sticker = {
       name: String(src.name || '').trim(),
       kind,
@@ -240,7 +248,7 @@ function normalizeStickers(raw, defaults, errors, { baseDir } = {}) {
       artOffsetYMm: parseNumber(`${prefix}.artOffsetYMm`, src.artOffsetYMm, errors, { min: -1000, fallback: 0 }),
       artScale: parseNumber(`${prefix}.artScale`, src.artScale, errors, { min: 0.1, fallback: defaults.artScale }),
       gradient,
-      gradientWidthMm: parseNumber(`${prefix}.gradientWidthMm`, src.gradientWidthMm, errors, { min: 0, fallback: defaults.gradientWidthMm }),
+      gradientWidthMm: disableGradient ? 0 : parseNumber(`${prefix}.gradientWidthMm`, src.gradientWidthMm, errors, { min: 0, fallback: defaults.gradientWidthMm }),
       textOverlays: normalizeTextOverlays(`${prefix}.textOverlays`, src.textOverlays, errors, { baseDir }),
     };
 
@@ -268,6 +276,10 @@ function normalizeTextOverlays(label, raw, errors, { baseDir } = {}) {
       continue;
     }
 
+    const wantsCenter = overlay.center === true
+      || overlay.centered === true
+      || String(overlay.anchor ?? '').trim().toLowerCase() === 'center';
+
     const text = String(overlay.text ?? '').trim();
     const xMm = parseNumber(`${label}[${i}].xMm`, overlay.xMm, errors, { min: -10000, fallback: 0 });
     const yMm = parseNumber(`${label}[${i}].yMm`, overlay.yMm, errors, { min: -10000, fallback: 0 });
@@ -289,8 +301,13 @@ function normalizeTextOverlays(label, raw, errors, { baseDir } = {}) {
     const backgroundRaw = overlay.background ?? overlay.backgroundColor ?? '';
     const background = normalizeOptionalHexColorStrict(`${label}[${i}].background`, backgroundRaw, errors, { fallback: '#ffffff' });
 
-    const align = String(overlay.align ?? 'left').trim().toLowerCase();
+    const align = String(overlay.align ?? (wantsCenter ? 'center' : 'left')).trim().toLowerCase();
     if (!['left', 'center', 'right'].includes(align)) errors.push(`${label}[${i}].align must be one of: left, center, right`);
+
+    const vAlignRaw = overlay.valign ?? overlay.vAlign ?? overlay.verticalAlign ?? (wantsCenter ? 'middle' : 'top');
+    let valign = String(vAlignRaw ?? 'top').trim().toLowerCase();
+    if (valign === 'center') valign = 'middle';
+    if (!['top', 'middle', 'bottom'].includes(valign)) errors.push(`${label}[${i}].valign must be one of: top, middle, bottom`);
 
     out.push({
       text,
@@ -303,6 +320,7 @@ function normalizeTextOverlays(label, raw, errors, { baseDir } = {}) {
       color,
       background,
       align,
+      valign,
     });
   }
 
