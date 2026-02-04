@@ -10,6 +10,7 @@ sheet:
   topStickerHeightMm: 25
   frontStickerHeightMm: 40
   cornerRadiusMm: 2
+  cutMarginMm: 1
   columns: 2
 debug:
   leftMm: 10
@@ -101,6 +102,7 @@ export function normalizeConfigForUi(rawConfig) {
   cfg.sheet.topStickerHeightMm = normalizeNumber(cfg.sheet.topStickerHeightMm, cfg.sheet.stickerHeightMm ?? 25);
   cfg.sheet.frontStickerHeightMm = normalizeNumber(cfg.sheet.frontStickerHeightMm, 40);
   cfg.sheet.cornerRadiusMm = normalizeNumber(cfg.sheet.cornerRadiusMm, 2);
+  cfg.sheet.cutMarginMm = normalizeNumber(cfg.sheet.cutMarginMm, 1);
   cfg.sheet.columns = normalizeInt(cfg.sheet.columns, 2);
 
   // Debug: always specified (toggle controls only show/hide).

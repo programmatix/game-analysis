@@ -21,7 +21,9 @@ Generic tools for editing and printing deck-box stickers.
 
 - `sheet.stickerWidthMm` is shared by all stickers.
 - `sheet.topStickerHeightMm` / `sheet.frontStickerHeightMm` control heights for `stickers[].kind: top|front`.
+- `sheet.cutMarginMm` insets the printed sticker inside the cut grid (default: `1`). Set `0` to cut exactly on the sticker border.
 - Optional top text overlays: `stickers[].textOverlays` entries support `text`, `xMm`, `yMm`, `background`, `color`, `font` (standard PDF font names like `Helvetica-Bold`) and/or `fontPath` (TTF/OTF).
+  - For convenience, `font` may also be set to a `.ttf`/`.otf` path (it will be treated as `fontPath`).
 
 Example:
 

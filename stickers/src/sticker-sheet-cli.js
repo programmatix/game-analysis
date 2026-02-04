@@ -123,6 +123,7 @@ function normalizeSheet(raw, errors) {
     topStickerHeightMm: parseNumber('sheet.topStickerHeightMm', src.topStickerHeightMm, errors, { min: 1, fallback: Number(src.stickerHeightMm) || 25 }),
     frontStickerHeightMm: parseNumber('sheet.frontStickerHeightMm', src.frontStickerHeightMm, errors, { min: 1, fallback: 40 }),
     cornerRadiusMm: parseNumber('sheet.cornerRadiusMm', src.cornerRadiusMm, errors, { min: 0, fallback: 2 }),
+    cutMarginMm: parseNumber('sheet.cutMarginMm', src.cutMarginMm, errors, { min: 0, fallback: 1 }),
     columns: parseInt('sheet.columns', src.columns, errors, { min: 1, max: 10, fallback: 2 }),
   };
 
@@ -274,9 +275,15 @@ function normalizeTextOverlays(label, raw, errors, { baseDir } = {}) {
     const fontSizeMm = parseNumber(`${label}[${i}].fontSizeMm`, overlay.fontSizeMm, errors, { min: 0.1, fallback: 3.6 });
     const paddingMm = parseNumber(`${label}[${i}].paddingMm`, overlay.paddingMm, errors, { min: 0, fallback: 1 });
 
-    const font = String(overlay.font ?? '').trim();
-    const fontPath = resolveOptionalPath(overlay.fontPath, baseDir);
-    if (fontPath && !fs.existsSync(fontPath)) errors.push(`${label}[${i}].fontPath does not exist: ${fontPath}`);
+    let font = String(overlay.font ?? '').trim();
+    let fontPath = resolveOptionalPath(overlay.fontPath, baseDir);
+    if (!fontPath && looksLikeFontFilePath(font)) {
+      fontPath = resolveOptionalPath(font, baseDir);
+      font = '';
+      if (fontPath && !fs.existsSync(fontPath)) errors.push(`${label}[${i}].font does not exist: ${fontPath}`);
+    } else if (fontPath && !fs.existsSync(fontPath)) {
+      errors.push(`${label}[${i}].fontPath does not exist: ${fontPath}`);
+    }
 
     const color = normalizeHexColorStrict(`${label}[${i}].color`, overlay.color ?? '#000000', errors, { fallback: '#000000' });
     const backgroundRaw = overlay.background ?? overlay.backgroundColor ?? '';
@@ -325,6 +332,13 @@ function resolveOptionalPath(value, baseDir) {
   if (path.isAbsolute(raw)) return raw;
   if (baseDir) return path.resolve(baseDir, raw);
   return path.resolve(raw);
+}
+
+function looksLikeFontFilePath(value) {
+  const raw = typeof value === 'string' ? value.trim() : '';
+  if (!raw) return false;
+  const ext = path.extname(raw).toLowerCase();
+  return ['.ttf', '.otf', '.woff', '.woff2'].includes(ext);
 }
 
 function parseNumber(label, raw, errors, { min, fallback }) {

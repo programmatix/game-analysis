@@ -132,10 +132,10 @@ async function handleFileRequest(url, res) {
   }
 
   const ext = path.extname(filePath).toLowerCase();
-  if (!['.png', '.jpg', '.jpeg', '.webp'].includes(ext)) {
+  if (!['.png', '.jpg', '.jpeg', '.webp', '.ttf', '.otf', '.woff', '.woff2'].includes(ext)) {
     res.statusCode = 415;
     res.setHeader('content-type', 'text/plain; charset=utf-8');
-    res.end('Unsupported file type (only png/jpg/jpeg/webp are allowed)');
+    res.end('Unsupported file type');
     return;
   }
 
@@ -175,6 +175,14 @@ function contentTypeForExtension(ext) {
       return 'image/jpeg';
     case '.webp':
       return 'image/webp';
+    case '.ttf':
+      return 'font/ttf';
+    case '.otf':
+      return 'font/otf';
+    case '.woff':
+      return 'font/woff';
+    case '.woff2':
+      return 'font/woff2';
     default:
       return 'application/octet-stream';
   }

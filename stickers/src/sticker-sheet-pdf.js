@@ -32,6 +32,7 @@ async function buildStickerSheetPdf(config, { debug } = {}) {
   const topStickerHeightMm = Number(sheet.topStickerHeightMm ?? sheet.stickerHeightMm) || 25;
   const frontStickerHeightMm = Number(sheet.frontStickerHeightMm) || 40;
   const cornerRadiusMm = Number(sheet.cornerRadiusMm) || 0;
+  const cutMarginMm = Math.max(0, Number(sheet.cutMarginMm) || 0);
 
   const pdfDoc = await PDFDocument.create();
   pdfDoc.registerFontkit(fontkit);
@@ -51,8 +52,8 @@ async function buildStickerSheetPdf(config, { debug } = {}) {
     page.drawRectangle({ x: 0, y: 0, width: page.getWidth(), height: page.getHeight(), color: rgb(1, 1, 1) });
 
     for (const slot of packed.stickers) {
-      await drawSticker(page, pdfDoc, imageCache, fontCache, slot.rectMm, slot.sticker, { cornerRadiusMm });
-      if (debug) drawDebugGuidesForStickerMm(page, slot.rectMm, config);
+      await drawSticker(page, pdfDoc, imageCache, fontCache, slot.rectMm, slot.sticker, { cornerRadiusMm, cutMarginMm });
+      if (debug) drawDebugGuidesForStickerMm(page, cutMarginMm > 0 ? insetRectMm(slot.rectMm, cutMarginMm) : slot.rectMm, config);
     }
 
     drawStickerEdgeCutMarksMm(page, packed.stickers.map(s => s.rectMm), { pageWidthMm, pageHeightMm });
@@ -77,21 +78,24 @@ function computePackedStickerPagesMm(config, { pageWidthMm, pageHeightMm, sticke
   return computePackedStickerPagesMmShared(config, { pageWidthMm, pageHeightMm, stickerWidthMm, topStickerHeightMm, frontStickerHeightMm });
 }
 
-async function drawSticker(page, pdfDoc, imageCache, fontCache, rectMm, sticker, { cornerRadiusMm }) {
+async function drawSticker(page, pdfDoc, imageCache, fontCache, rectMm, sticker, { cornerRadiusMm, cutMarginMm }) {
   const kind = String(sticker?.kind || 'top').trim().toLowerCase();
+  const insetMm = Math.max(0, Number(cutMarginMm) || 0);
+  const innerRectMm = insetMm > 0 ? insetRectMm(rectMm, insetMm) : rectMm;
+  const innerCornerRadiusMm = Math.max(0, (Number(cornerRadiusMm) || 0) - insetMm);
 
   const embeddedLogo = sticker.logo ? await embedImage(pdfDoc, sticker.logo, imageCache) : null;
   const embeddedArt = sticker.art ? await embedImage(pdfDoc, sticker.art, imageCache) : null;
 
   if (kind === 'front') {
-    await drawFrontSticker(page, rectMm, { embeddedLogo, embeddedArt }, { ...sticker, cornerRadiusMm });
+    await drawFrontSticker(page, innerRectMm, { embeddedLogo, embeddedArt }, { ...sticker, cornerRadiusMm: innerCornerRadiusMm });
     return;
   }
 
   // default: top sticker
   const gradient = parseHexColor(sticker.gradient ?? sticker.yellow, rgb(0.97, 0.82, 0.09));
-  await drawTopSticker(page, rectMm, { embeddedLogo, embeddedArt }, { ...sticker, cornerRadiusMm, gradient });
-  await drawTopTextOverlaysMm(page, pdfDoc, fontCache, rectMm, sticker, { cornerRadiusMm });
+  await drawTopSticker(page, innerRectMm, { embeddedLogo, embeddedArt }, { ...sticker, cornerRadiusMm: innerCornerRadiusMm, gradient });
+  await drawTopTextOverlaysMm(page, pdfDoc, fontCache, innerRectMm, sticker, { cornerRadiusMm: innerCornerRadiusMm });
 }
 
 async function drawTopSticker(page, rectMm, { embeddedLogo, embeddedArt }, cfg) {

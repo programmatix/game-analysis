@@ -191,6 +191,7 @@ export default function App() {
                 widthMm={config.sheet?.stickerWidthMm}
                 heightMm={config.sheet?.topStickerHeightMm}
                 cornerRadiusMm={config.sheet?.cornerRadiusMm}
+                cutMarginMm={config.sheet?.cutMarginMm}
                 debug={config.debug}
                 showDebug={showDebug}
                 sticker={topSticker}
@@ -228,6 +229,7 @@ export default function App() {
                 widthMm={config.sheet?.stickerWidthMm}
                 heightMm={config.sheet?.frontStickerHeightMm}
                 cornerRadiusMm={config.sheet?.cornerRadiusMm}
+                cutMarginMm={config.sheet?.cutMarginMm}
                 debug={config.debug}
                 showDebug={showDebug}
                 sticker={frontSticker}

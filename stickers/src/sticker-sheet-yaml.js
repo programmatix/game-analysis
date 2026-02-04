@@ -73,6 +73,7 @@ function buildStickerSheetYamlConfig({
       topStickerHeightMm: Number(topStickerHeightMm ?? stickerHeightMm) || 25,
       frontStickerHeightMm: Number(frontStickerHeightMm) || 40,
       cornerRadiusMm: Number(cornerRadiusMm) || 2,
+      cutMarginMm: 1,
       columns: clampInt(columns ?? 2, { min: 1, max: 10 }),
     },
     debug: normalizeDebug(debug),

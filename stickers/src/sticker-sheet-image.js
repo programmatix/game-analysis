@@ -1,4 +1,5 @@
 const fs = require('node:fs');
+const crypto = require('node:crypto');
 const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
@@ -75,6 +76,7 @@ function buildStickerSheetPageHtml({
   pageWidthMm,
   pageHeightMm,
   cornerRadiusMm,
+  cutMarginMm,
   packedPage,
   baseDir,
   pxPerMm,
@@ -88,21 +90,86 @@ function buildStickerSheetPageHtml({
   const widthPx = Math.round(pageWidthMm * safePxPerMm);
   const heightPx = Math.round(pageHeightMm * safePxPerMm);
 
+  function looksLikeFontFilePath(value) {
+    const raw = typeof value === 'string' ? value.trim() : '';
+    if (!raw) return false;
+    const ext = path.extname(raw).toLowerCase();
+    return ['.ttf', '.otf', '.woff', '.woff2'].includes(ext);
+  }
+
+  function resolveLocalPath(p) {
+    const raw = typeof p === 'string' ? p.trim() : '';
+    if (!raw) return '';
+    if (path.isAbsolute(raw)) return raw;
+    return path.resolve(String(baseDir || ''), raw);
+  }
+
+  function fontFormatForPath(fontPath) {
+    const ext = path.extname(String(fontPath || '')).toLowerCase();
+    switch (ext) {
+      case '.otf':
+        return 'opentype';
+      case '.ttf':
+        return 'truetype';
+      case '.woff2':
+        return 'woff2';
+      case '.woff':
+        return 'woff';
+      default:
+        return '';
+    }
+  }
+
+  function fontFamilyForPath(fontPath) {
+    const digest = crypto.createHash('sha1').update(String(fontPath)).digest('hex').slice(0, 12);
+    return `DeckboxFont_${digest}`;
+  }
+
   // Pre-resolve file:// URLs for images so the browser can load them directly.
+  const fontFacesByPath = new Map();
   const stickers = (packedPage?.stickers || []).map(slot => {
     const rect = slot.rectMm || { x: 0, y: 0, width: 0, height: 0 };
     const sticker = slot.sticker || {};
     const artUrl = sticker.art ? pathToFileURL(String(sticker.art)).toString() : '';
     const logoUrl = sticker.logo ? pathToFileURL(String(sticker.logo)).toString() : '';
+    const textOverlays = Array.isArray(sticker.textOverlays)
+      ? sticker.textOverlays.map(o => {
+          const overlay = o && typeof o === 'object' ? { ...o } : {};
+          const explicitFontPath = typeof overlay.fontPath === 'string' ? overlay.fontPath.trim() : '';
+          const implicitFontPath = !explicitFontPath && looksLikeFontFilePath(overlay.font) ? String(overlay.font || '').trim() : '';
+          const fontPath = resolveLocalPath(explicitFontPath || implicitFontPath);
+          if (fontPath) {
+            const family = fontFamilyForPath(fontPath);
+            overlay.__fontFamily = family;
+            if (!fontFacesByPath.has(fontPath)) {
+              fontFacesByPath.set(fontPath, {
+                family,
+                url: pathToFileURL(fontPath).toString(),
+                format: fontFormatForPath(fontPath),
+              });
+            }
+          }
+          return overlay;
+        })
+      : sticker.textOverlays;
     return {
       rectMm: rect,
       sticker: {
         ...sticker,
         artUrl,
         logoUrl,
+        textOverlays,
       },
     };
   });
+
+  const fontFaces = Array.from(fontFacesByPath.values());
+  const fontCss = fontFaces.map(ff => {
+    const src = ff.format
+      ? `url(${JSON.stringify(ff.url)}) format(${JSON.stringify(ff.format)})`
+      : `url(${JSON.stringify(ff.url)})`;
+    return `@font-face { font-family: ${JSON.stringify(ff.family)}; src: ${src}; font-display: block; }`;
+  }).join('\n      ');
 
   const payload = {
     page: { widthMm: pageWidthMm, heightMm: pageHeightMm, cornerRadiusMm: Number(cornerRadiusMm) || 0 },
@@ -111,6 +178,8 @@ function buildStickerSheetPageHtml({
     showDebug: Boolean(showDebug),
     debug: debug && typeof debug === 'object' ? debug : {},
     baseDir: String(baseDir || ''),
+    fontFamilies: fontFaces.map(f => f.family),
+    cutMarginMm: Math.max(0, Number(cutMarginMm) || 0),
   };
 
   // NOTE: This is intentionally a single self-contained HTML file so we can render via file:// + headless Chrome.
@@ -124,6 +193,7 @@ function buildStickerSheetPageHtml({
       html, body { margin: 0; padding: 0; background: #fff; overflow: hidden; }
       #container { width: ${widthPx}px; height: ${heightPx}px; }
       canvas { image-rendering: auto; }
+      ${fontCss}
     </style>
   </head>
   <body>
@@ -136,6 +206,20 @@ function buildStickerSheetPageHtml({
 
         function mmToPx(mm) { return (Number(mm) || 0) * pxPerMm; }
         function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
+
+        async function ensureFontsLoaded(families) {
+          const list = Array.isArray(families) ? families.filter(Boolean) : [];
+          if (!list.length) return;
+          if (!document.fonts || typeof document.fonts.load !== 'function') return;
+          await Promise.all(list.map(family => document.fonts.load(\`16px "\${family}"\`).catch(() => null)));
+          if (document.fonts && document.fonts.ready) {
+            try {
+              await document.fonts.ready;
+            } catch {
+              // ignore
+            }
+          }
+        }
 
         function clipRoundedRect(ctx, x, y, w, h, r) {
           const radius = Math.max(0, Math.min(r, Math.min(w, h) / 2));
@@ -201,6 +285,10 @@ function buildStickerSheetPageHtml({
           const stickerW = Number(rect.width) || 70;
           const stickerH = Number(rect.height) || 25;
           const radiusMm = Number(payload.page.cornerRadiusMm) || 2;
+          const cutMarginMm = Math.max(0, Number(payload.cutMarginMm) || 0);
+          const contentW = Math.max(0, stickerW - cutMarginMm * 2);
+          const contentH = Math.max(0, stickerH - cutMarginMm * 2);
+          const contentRadiusMm = Math.max(0, radiusMm - cutMarginMm);
           const kind = String(sticker.kind || 'top').trim().toLowerCase() || 'top';
 
           const xMm = Number(rect.x) || 0;
@@ -214,20 +302,23 @@ function buildStickerSheetPageHtml({
           const stickerRoot = new Konva.Group({ scaleX: pxPerMmLocal, scaleY: pxPerMmLocal });
           group.add(stickerRoot);
 
+          const contentRoot = new Konva.Group({ x: cutMarginMm, y: cutMarginMm });
+          stickerRoot.add(contentRoot);
+
           const clipGroup = new Konva.Group({
-            clipFunc: ctx => clipRoundedRect(ctx, 0, 0, stickerW, stickerH, radiusMm),
+            clipFunc: ctx => clipRoundedRect(ctx, 0, 0, contentW, contentH, contentRadiusMm),
           });
-          stickerRoot.add(clipGroup);
+          contentRoot.add(clipGroup);
 
           const bg = kind === 'top' ? (sticker.gradient || '#f7d117') : '#ffffff';
-          clipGroup.add(new Konva.Rect({ x: 0, y: 0, width: stickerW, height: stickerH, fill: bg }));
+          clipGroup.add(new Konva.Rect({ x: 0, y: 0, width: contentW, height: contentH, fill: bg }));
 
           if (sticker.__artImg) {
             const artRect = computeCoverRectMm(
               sticker.__artImg.naturalWidth,
               sticker.__artImg.naturalHeight,
-              stickerW,
-              stickerH,
+              contentW,
+              contentH,
               sticker.artScale,
               sticker.artOffsetXMm,
               sticker.artOffsetYMm
@@ -243,18 +334,18 @@ function buildStickerSheetPageHtml({
           }
 
           if (kind === 'top') {
-            const gradientWidthMm = Math.max(0, Math.min(Number(sticker.gradientWidthMm) || 0, stickerW));
+            const gradientWidthMm = Math.max(0, Math.min(Number(sticker.gradientWidthMm) || 0, contentW));
             const gradientSolidMm = Math.max(0, Math.min(20, gradientWidthMm));
             const gradientFadeMm = Math.max(0, gradientWidthMm - gradientSolidMm);
             if (gradientSolidMm > 0) {
-              clipGroup.add(new Konva.Rect({ x: 0, y: 0, width: gradientSolidMm, height: stickerH, fill: rgba(sticker.gradient, 1), opacity: 1 }));
+              clipGroup.add(new Konva.Rect({ x: 0, y: 0, width: gradientSolidMm, height: contentH, fill: rgba(sticker.gradient, 1), opacity: 1 }));
             }
             if (gradientFadeMm > 0) {
               clipGroup.add(new Konva.Rect({
                 x: gradientSolidMm,
                 y: 0,
                 width: gradientFadeMm,
-                height: stickerH,
+                height: contentH,
                 fillLinearGradientStartPoint: { x: 0, y: 0 },
                 fillLinearGradientEndPoint: { x: gradientFadeMm, y: 0 },
                 fillLinearGradientColorStops: [0, rgba(sticker.gradient, 1), 1, rgba(sticker.gradient, 0)],
@@ -265,7 +356,7 @@ function buildStickerSheetPageHtml({
 
           if (sticker.__logoImg) {
             const paddingMm = 1.2;
-            const safeRect = { x: paddingMm, y: paddingMm, width: stickerW - paddingMm * 2, height: stickerH - paddingMm * 2 };
+            const safeRect = { x: paddingMm, y: paddingMm, width: contentW - paddingMm * 2, height: contentH - paddingMm * 2 };
             const logoMaxWidthMm = Math.max(0, Number(sticker.logoMaxWidthMm) || 28);
             const logoMaxHeightMm = Math.max(0, Number(sticker.logoMaxHeightMm) || 18);
             const logoAreaWidthMm = Math.min(safeRect.width * 0.45, logoMaxWidthMm + 6);
@@ -299,7 +390,7 @@ function buildStickerSheetPageHtml({
               const text = String(overlay.text || '');
               if (!text) continue;
               const overlayGroup = new Konva.Group({ x: Number(overlay.xMm) || 0, y: Number(overlay.yMm) || 0 });
-              stickerRoot.add(overlayGroup);
+              contentRoot.add(overlayGroup);
 
               const fontSizeMm = Math.max(0.1, Number(overlay.fontSizeMm) || 3.6);
               const paddingMm2 = Math.max(0, Number(overlay.paddingMm) || 1);
@@ -307,7 +398,9 @@ function buildStickerSheetPageHtml({
               const heightGuess = Math.max(2, fontSizeMm * 1.2 + paddingMm2 * 2);
               const bg2 = typeof overlay.background === 'string' ? overlay.background : (typeof overlay.backgroundColor === 'string' ? overlay.backgroundColor : '');
               const fg2 = typeof overlay.color === 'string' ? overlay.color : '#000000';
-              const fontFamily = typeof overlay.font === 'string' && overlay.font.trim() ? overlay.font.trim() : 'Helvetica';
+              const fontFamily = typeof overlay.__fontFamily === 'string' && overlay.__fontFamily.trim()
+                ? overlay.__fontFamily.trim()
+                : (typeof overlay.font === 'string' && overlay.font.trim() ? overlay.font.trim() : 'Helvetica');
 
               if (bg2) overlayGroup.add(new Konva.Rect({ x: 0, y: 0, width: widthGuess, height: heightGuess, fill: bg2, opacity: 0.92 }));
               overlayGroup.add(new Konva.Text({
@@ -325,16 +418,16 @@ function buildStickerSheetPageHtml({
           }
 
           // Sticker outline
-          stickerRoot.add(new Konva.Rect({ x: 0, y: 0, width: stickerW, height: stickerH, cornerRadius: radiusMm, stroke: 'rgba(0,0,0,0.5)', strokeWidth: 0.15 }));
+          contentRoot.add(new Konva.Rect({ x: 0, y: 0, width: contentW, height: contentH, cornerRadius: contentRadiusMm, stroke: 'rgba(0,0,0,0.5)', strokeWidth: 0.15 }));
 
           if (payload.showDebug) {
             const x1 = Number(payload.debug?.leftMm) || 10;
-            const x2 = stickerW - (Number(payload.debug?.rightFromRightMm) || 40);
-            const yMid = stickerH / 2;
-            stickerRoot.add(new Konva.Line({ points: [x1, 0, x1, stickerH], stroke: 'red', strokeWidth: 0.2 }));
-            stickerRoot.add(new Konva.Line({ points: [x2, 0, x2, stickerH], stroke: 'red', strokeWidth: 0.2 }));
+            const x2 = contentW - (Number(payload.debug?.rightFromRightMm) || 40);
+            const yMid = contentH / 2;
+            contentRoot.add(new Konva.Line({ points: [x1, 0, x1, contentH], stroke: 'red', strokeWidth: 0.2 }));
+            contentRoot.add(new Konva.Line({ points: [x2, 0, x2, contentH], stroke: 'red', strokeWidth: 0.2 }));
             if (payload.debug?.centerHorizontal !== false) {
-              stickerRoot.add(new Konva.Line({ points: [0, yMid, stickerW, yMid], stroke: 'red', strokeWidth: 0.2 }));
+              contentRoot.add(new Konva.Line({ points: [0, yMid, contentW, yMid], stroke: 'red', strokeWidth: 0.2 }));
             }
           }
         }
@@ -382,6 +475,8 @@ function buildStickerSheetPageHtml({
         async function main() {
           // Force deterministic canvas sizing.
           if (window.Konva && typeof window.Konva.pixelRatio === 'number') window.Konva.pixelRatio = 1;
+
+          await ensureFontsLoaded(payload.fontFamilies);
 
           const pageWidthMm = payload.page.widthMm;
           const pageHeightMm = payload.page.heightMm;
@@ -470,6 +565,7 @@ async function renderStickerSheetPng(config, { outputPath, pxPerMm = 12, debug }
         pageWidthMm,
         pageHeightMm,
         cornerRadiusMm: sheet.cornerRadiusMm,
+        cutMarginMm: sheet.cutMarginMm,
         packedPage,
         baseDir,
         pxPerMm,
@@ -531,4 +627,3 @@ async function renderStickerSheetPng(config, { outputPath, pxPerMm = 12, debug }
 module.exports = {
   renderStickerSheetPng,
 };
-
